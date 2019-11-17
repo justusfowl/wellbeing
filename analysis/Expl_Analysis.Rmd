@@ -1,0 +1,37 @@
+---
+title: "WellbeingAnalytics"
+author: "Uli Kaulfuß"
+date: "2 November 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(foreign)
+library(readstata13)
+library(dplyr)
+
+```
+
+## Wellbeing Analytics
+
+
+```{r data loading}
+DE_data <- read.dta13("data/GEDA14.dta")
+EN_data <- read.dta13("data/translated.data.set.dta")
+
+DE_data$RowID <- seq.int(nrow(DE_data))
+EN_data$RowID <- seq.int(nrow(EN_data))
+
+# save(dat, file = "data.RData")
+
+```
+
+```{r}
+library(Hmisc)
+res2<-rcorr(as.matrix(dat))
+flattenCorrMatrix(res2$r, res2$P)
+```
+
+
+

@@ -1,0 +1,5 @@
+analysis/data/
+analysis/.Rhistory
+
+*.RData
+.Rproj.user
