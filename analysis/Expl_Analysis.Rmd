@@ -11,27 +11,346 @@ library(foreign)
 library(readstata13)
 library(dplyr)
 
+require(ggplot2)
+require(MASS)
+require(Hmisc)
+require(reshape2)
+
 ```
 
 ## Wellbeing Analytics
 
 
 ```{r data loading}
-DE_data <- read.dta13("data/GEDA14.dta")
-EN_data <- read.dta13("data/translated.data.set.dta")
 
-DE_data$RowID <- seq.int(nrow(DE_data))
-EN_data$RowID <- seq.int(nrow(EN_data))
+suppressWarnings({
+  DE_data <- read.dta13("data/GEDA14.dta")
+  EN_data <- read.dta13("data/translated.data.set.dta")
+  
+  DE_data$RowID <- seq.int(nrow(DE_data))
+  EN_data$RowID <- seq.int(nrow(EN_data))
+  
+  save(EN_data, file = "data/translated.data.set.RData")
+})
 
-# save(dat, file = "data.RData")
-
+head(EN_data)
 ```
+
+
 
 ```{r}
-library(Hmisc)
-res2<-rcorr(as.matrix(dat))
-flattenCorrMatrix(res2$r, res2$P)
+
+df_base <- EN_data %>% dplyr::select(
+  KHhyp12,
+  KHhyp,
+  KHhyp12pB,
+  KHhypmedC,
+  KHmyo12,
+  KHkhk12,
+  KHbbmyo12,
+  KHhi12,
+  KHsa12,
+  KHbbsa12,
+  KHdiabB12,
+  KHab12,
+  KHkarz12,
+  KHlip12A,
+  KHlipA,
+  KHlipmedA,
+  KHcb12,
+  KHulc12,
+  KHced12,
+  KHlz12,
+  KHcle12,
+  KHniB12,
+  KHdge12,
+  KHra12,
+  KHos12,
+  KHalgi112,
+  GZmehm1,
+  GZmehm3C,
+  GZmehm2D,
+  GZsubj1,
+  SHseh1,
+  SHhoer1,
+  BBmyo12,
+  BBsa12,
+  BBdors112,
+  BBdors212,
+  BBblas12B,
+  BBgehen,
+  BBtreppe,
+  BBschwierig1,
+  BBschwierig2,
+  BBschwierig3,
+  BBschwierig4,
+  BBschwierig5,
+  BBhilfe1,
+  BBhilfe2,
+  BBhh1,
+  BBhh2,
+  BBhh3,
+  BBhh4,
+  BBhh5,
+  BBhh6,
+  BBhh7,
+  BBhhhilfe1,
+  BBhhhilfe2,
+  BBbehB,
+  BBbehzC_k,
+  UVartverkehr,
+  UVarthaus,
+  UVartfreiz,
+  UVarztE_k,
+  UVarbeit1,
+  UVarbeit2,
+  SEschwA_zz,
+  LQsf367C,
+  LQsf368C,
+  LQzufrB10,
+  PKdep12,
+  PKphq1,
+  PKphq2,
+  PKphq3,
+  PKphq4,
+  PKphq5,
+  PKphq6,
+  PKphq7,
+  PKphq8,
+  SFoslo1C,
+  SFoslo2C,
+  SFoslo3A,
+  SFosloA,
+  IAhypus,
+  IAcholus,
+  IAdiabus,
+  IAtermin,
+  IAweg,
+  IAarzt14B,
+  IAarzt1B,
+  IAarzt1B4w,
+  IAarzt1B12_k,
+  IAfa,
+  IAfa4w,
+  IAfa12_k,
+  IAarzt8C,
+  IAkhs,
+  IAkhs_k,
+  IAambC,
+  IAambC_k,
+  IAther2B,
+  IApflege,
+  IAkfutyp2B_lz,
+  IAkfutyp4B_lz,
+  IAkfutyp7B_lz,
+  IAkfutyp5B_lz,
+  IAkv1D,
+  IPinfl4,
+  IPinfl4_mm,
+  IPinfl4_jj,
+  IPinfl6B,
+  IPtet,
+  IPtet_lz,
+  AMarztB,
+  AMfrei,
+  AUarbC,
+  AUarbzD_k,
+  KAehispaq1,
+  KAehispaq2,
+  KAehispaq3,
+  KAehispaq4,
+  KAehispaq5,
+  KAehispaq6,
+  KAspodauC_k,
+  KAehispaq8,
+  KAabka,
+  KAsabka,
+  KAtbka_k,
+  KAgfka,
+  KAgfa,
+  KAgfka1,
+  KAgfmk,
+  KAgka,
+  KAgka_k,
+  ENobstB,
+  ENobstBz1,
+  ENgemB,
+  ENgemBz1,
+  AKoft12_k,
+  AKechi47,
+  AKbingeC_k3,
+  AKrisiko,
+  RCstat_k2,
+  RCtyp_m1,
+  RCtyp_m2,
+  RCtyp_m3,
+  RCtyp_m4,
+  RCtyp_m6,
+  RCtyp_m7,
+  RCtyphaupt,
+  RCzA_ttk,
+  RCz2B_ttk,
+  RCzA_wwk,
+  RCz2B_wwk,
+  RC_ak,
+  RCex_ak,
+  RCpass4,
+  RCpassort_m2,
+  RCpassort_m1,
+  RCpassort_m7,
+  RCpassort_m4,
+  RCpassort_m3,
+  RCpassort_m5,
+  RCpassort_m6,
+  GVasku1,
+  GVasku2,
+  GVasku3,
+  ABtragen,
+  ABschichtC,
+  ABsubjB,
+  BLpflege2C,
+  BLpers,
+  BLpflegedauB,
+  sex,
+  age5B,
+  PAfam1C,
+  PAfam3,
+  PAhh_k,
+  PAmarstadefacto,
+  PAhhnbpersk_0_4,
+  PAhhnbpersk_5_13,
+  PAhhnbpersk_14_15,
+  PAhhnbpersk_16_24,
+  PAhhnbpersk_25_64,
+  PAhhnbpersk_65PLUS,
+  PAhhtype,
+  PAhh_act,
+  PAhh_inact,
+  PAgroe,
+  PAgewiB,
+  PAbmiB_k,
+  SDaeqeink_k,
+  SDses_bild,
+  SDses_ber,
+  SDses_eink,
+  SDses_score,
+  SDses_q5,
+  SDses,
+  SDhhincomez,
+  SDbild1D,
+  SDbild4C,
+  SDisced11,
+  SDbest_lz,
+  SDbverh,
+  SDfuehr,
+  SDbest,
+  SDbverh2,
+  SDfuehr2,
+  SDjobstat,
+  SDetoed,
+  SDhvtypD,
+  SDft_pt,
+  SDerwt0a,
+  SDmainstat,
+  SDalo,
+  SDalo_k,
+  SDalo_mmk,
+  SDalokh,
+  SDalogz,
+  MIbirthplace,
+  MIcitizen,
+  untm,
+  untj,
+  ppoint,
+  ktyp4,
+  bula,
+  wob
+)
+
+df_base$GZmehm1 <- factor(df_base$GZmehm1 , levels = c("Very bad", "bad", "Mediocre", "good", "Very good"))
+
 ```
+
+## Run a basic ordered logit model 
+
+One of the assumptions underlying ordinal logistic (and ordinal probit) regression is that the relationship between each pair of outcome groups is the same. In other words, ordinal logistic regression assumes that the coefficients that describe the relationship between, say, the lowest versus all higher categories of the response variable are the same as those that describe the relationship between the next lowest category and all higher categories, etc. This is called the proportional odds assumption or the parallel regression assumption. Because the relationship between all pairs of groups is the same, there is only one set of coefficients.
+
+Souce: https://stats.idre.ucla.edu/r/dae/ordinal-logistic-regression/
+
+```{r}
+
+df_test <- df_base %>% dplyr::select(GZmehm1, KHhyp)
+
+# encode factors as numeric
+
+df_test$KHhyp <- as.character(df_test$KHhyp)
+
+df_test[!is.na(df_test$KHhyp) & df_test$KHhyp == 'Yes',]$KHhyp <- '1'
+df_test[!is.na(df_test$KHhyp) & df_test$KHhyp == 'No',]$KHhyp <- '0'
+
+df_test$KHhyp <- as.numeric(df_test$KHhyp)
+
+df_test <- na.omit(df_test)
+
+m <- polr(GZmehm1 ~ KHhyp, data = df_test, Hess=TRUE)
+
+## view a summary of the model
+summary(m)
+
+
+```
+
+
+```{r calculating p-values}
+
+(ctable <- coef(summary(m)))
+p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
+(ctable <- cbind(ctable, "p value" = p))
+
+# (ci <- confint(m))
+```
+
+
+```{r Odds Ratios}
+exp(coef(m))
+```
+
+As of now, the interpretation would be: 
+For people that have higher blood pressure, the odds of feeling healthier are 75% lower compared to the people that do not have high BP. 
+
+```{r}
+sf <- function(y) {
+  c('Y>=1' = qlogis(mean(y >= 1)),
+    'Y>=2' = qlogis(mean(y >= 2)),
+    'Y>=3' = qlogis(mean(y >= 3)),
+    'Y>=4' = qlogis(mean(y >= 4)),
+    'Y>=5' = qlogis(mean(y >= 5))
+    )
+}
+
+(s <- with(df_test, summary(as.numeric(GZmehm1) ~ KHhyp, fun=sf)))
+```
+
+
+
+```{r}
+glm(I(as.numeric(GZmehm1) >= 3) ~ KHhyp, family="binomial", data = df_test)
+```
+
+
+```{r}
+glm(I(as.numeric(GZmehm1) >= 4) ~ KHhyp, family="binomial", data = df_test)
+```
+
+
+```{r}
+plot(s, which=1:5, pch=1:5, xlab='logit', main=' ', xlim=range(s[,4:5]))
+```
+
+
+This graph indicates that for high blood pressure, the parallel slopes assumption does not hold for KHhyp
+@Todo: Question: What is the resulting question succeeding?
+
 
 
 

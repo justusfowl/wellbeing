@@ -1,4 +1,5 @@
 analysis/data/
+analysis/data.doc
 analysis/.Rhistory
 
 *.RData
