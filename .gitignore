@@ -1,6 +1,8 @@
 analysis/data/
 analysis/data.doc
 analysis/.Rhistory
+analysis/*.log
+analysis/*.pdf
 
 *.RData
 .Rproj.user
