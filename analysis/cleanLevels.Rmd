@@ -1,0 +1,158 @@
+---
+title: "LevelsClean"
+author: "Uli Kaulfuss"
+date: "5 Januar 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, rows.print=25)
+set.seed(42)
+
+library(dplyr)
+library(Hmisc)
+library(readxl)
+library(data.table)
+```
+
+# Objective
+
+The following script uses the exported GEDA data from STATA and - based off the data dictionary - ensures correct factorization of the data including value and variable labeling incl. translation of the dataset.
+
+To ensure that the script runs, download the required files from Googel drive and put them in the respective directories. 
+
+## Processing
+
+Loading the GEDA daat as it is exported from STATA with characters / strings as output format
+
+```{r}
+
+GEDA14_Export_text <- read_excel("data/GEDA14.Export.xlsx")
+
+df_geda_de <- GEDA14_Export_text %>% dplyr::select(c(sex, GZmehm1, GZmehm3C, PAgroe))
+```
+
+Load meta data from the data dictionary as it has been prepared in XLS
+
+```{r}
+df_meta_lvls <- read_excel("data.doc/GEDA14_Variablenuebersicht_Analyse.xlsx", sheet='levels')
+
+df_meta_lvls$numLevel <- as.numeric(df_meta_lvls$numLevel)
+
+```
+
+Loop through all columns and replace the texts from the STATA export with the levels from the data dictionary. "ORDINAL" factors need to be sorted correctly, this is ensured through the lookup table in the meta data
+
+```{r}
+df_geda_de <- GEDA14_Export_text # %>% dplyr::select(c(sex, GZmehm1, GZmehm3C, PAgroe, IAarzt1B4w))
+
+df_geda_en <- copy(df_geda_de)
+
+for (i in colnames(df_geda_de)){
+  
+  col_meta <- df_meta_lvls[df_meta_lvls$Varname == i,]
+  
+  col_type <- col_meta[1,]$Type
+  
+  if(nrow(col_meta) > 0){
+    
+    print(paste("variable: ", i))
+    
+    if (col_type == 'Nominal' |col_type == 'Ordinal' ){
+      
+      unique_lvls <- unique(df_geda_de[[i]])
+      
+      for (l in unique_lvls){
+        
+        if (!is.na(l)){
+          # print(paste(i, ": level: ", l))
+          
+          if (nrow(col_meta[col_meta$textLevel == l,]) > 0){
+            df_geda_de[[i]][df_geda_de[[i]] == l] <- col_meta[col_meta$textLevel == l,]$numLevel
+            
+            df_geda_en[[i]][df_geda_en[[i]] == l] <- col_meta[col_meta$textLevel == l,]$numLevel
+            
+            
+          }
+          
+        }
+        
+      }
+      
+      # for text columns, change data to factors 
+      
+      if (col_type == 'Nominal'){
+        
+        df_geda_de[[i]] <- factor(df_geda_de[[i]], levels=col_meta$numLevel, labels=col_meta$textLevel)
+        df_geda_en[[i]] <- factor(df_geda_en[[i]], levels=col_meta$numLevel, labels=col_meta$textLabelEn)
+
+      }else if (col_type == 'Ordinal'){
+        
+        sort_order <- col_meta[1,]$SortOrder
+        
+        if(sort_order == "DESC"){
+          df_geda_de[[i]] <- ordered(df_geda_de[[i]], levels=col_meta[order(-col_meta$numLevel),]$numLevel, labels=col_meta[order(-col_meta$numLevel),]$textLevel)
+          df_geda_en[[i]] <- ordered(df_geda_en[[i]], levels=col_meta[order(-col_meta$numLevel),]$numLevel, labels=col_meta[order(-col_meta$numLevel),]$textLabelEn)
+          
+        }else{
+          df_geda_de[[i]] <- ordered(df_geda_de[[i]], levels=col_meta[order(col_meta$numLevel),]$numLevel, labels=col_meta[order(col_meta$numLevel),]$textLevel)
+          df_geda_en[[i]] <- ordered(df_geda_en[[i]], levels=col_meta[order(col_meta$numLevel),]$numLevel, labels=col_meta[order(col_meta$numLevel),]$textLabelEn)
+        }
+        
+      }
+      
+    }else if (col_type == "Scale"){
+      
+      unique_lvls <- unique(col_meta)
+      
+      for (row_it in 1:nrow(col_meta)){
+        
+        l <- col_meta[row_it,]$textLevel
+        
+        if (!is.na(l) & l != ""){
+          # print(paste(i, ": level: ", l))
+        
+          df_geda_de[[i]][df_geda_de[[i]] == l] <- col_meta[col_meta$textLevel == l,]$numLevel
+          df_geda_en[[i]][df_geda_en[[i]] == l] <- col_meta[col_meta$textLevel == l,]$numLevel
+          
+        }
+        
+      }
+      
+      # for scale columns, change datatype to numeric 
+      df_geda_de[[i]]<- as.numeric(df_geda_de[[i]])
+      df_geda_en[[i]]<- as.numeric(df_geda_en[[i]])
+      
+      
+    }
+      # add variable label, access this with Hmisc-functions like describe(%dataframe%)
+      
+      label(df_geda_de[[i]]) <- col_meta[1,]$VarLabel
+      label(df_geda_en[[i]]) <- col_meta[1,]$VarLabelEn
+      
+      
+  }else{
+    print(paste(i, ": type: ", col_type))
+  }
+  
+}
+
+
+```
+
+Not only value labels have been added, also variable labels are now included so that the cryptic information is released to human readable text what each variable means. This can only be accessed by Hmisc functions as show below. Two dataframes incl. translated data are avaible and can be loaded for further processing. 
+
+```{r}
+describe(df_geda_de %>% dplyr::select(KHhyp))
+
+```
+
+```{r}
+describe(df_geda_en %>% dplyr::select(KHhyp))
+```
+
+```{r}
+save(df_geda_de, df_geda_en, file = "data/geda_data.RData")
+```
+
