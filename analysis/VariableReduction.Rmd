@@ -1,12 +1,15 @@
 ---
 title: "VariableReduction"
-author: "Uli Kaulfuß"
+author: "Uli Kaulfuss"
 date: "30 Dezember 2019"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, rows.print=25)
+set.seed(42)
+
+
 library(foreign)
 library(readstata13)
 library(dplyr)
@@ -16,21 +19,21 @@ require(ggplot2)
 require(MASS)
 require(Hmisc)
 require(reshape2)
-
 library(cluster)
-
 library(VIM)
 library(readxl)
 
-set.seed(42)
-
 ```
+
+
 
 ```{r}
 GEDA14_meta <- read_excel("data.doc/GEDA14_Variablenuebersicht.xlsx")
 df_meta <- GEDA14_meta %>% dplyr::select(c(variable, varlabel_de, varlabel, Thema_und_Fragebogenausschnitt))
-```
 
+GEDA14_meta <- read_excel("data/GEDA14_Variablenuebersicht.xlsx")
+
+```
 
 
 ```{r}
