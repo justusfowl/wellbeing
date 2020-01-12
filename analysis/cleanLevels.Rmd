@@ -75,8 +75,7 @@ for (i in colnames(df_geda_de)){
             df_geda_de[[i]][df_geda_de[[i]] == l] <- col_meta[col_meta$textLevel == l,]$numLevel
             
             df_geda_en[[i]][df_geda_en[[i]] == l] <- col_meta[col_meta$textLevel == l,]$numLevel
-            df_geda_num[[i]][df_geda_num[[i]] == l] <- col_meta[col_meta$textLevel == l,]$numLevel
-            
+            df_geda_num[[i]][df_geda_num[[i]] == l] <- as.numeric(col_meta[col_meta$textLevel == l,]$numLevel)
             
           }
           
@@ -90,7 +89,7 @@ for (i in colnames(df_geda_de)){
         
         df_geda_de[[i]] <- factor(df_geda_de[[i]], levels=col_meta$numLevel, labels=col_meta$textLevel)
         df_geda_en[[i]] <- factor(df_geda_en[[i]], levels=col_meta$numLevel, labels=col_meta$textLabelEn)
-        df_geda_num[[i]] <- factor(as.numeric(df_geda_num[[i]]), levels=as.numeric(col_meta$numLevel), labels=col_meta$numLevel)
+        # df_geda_num[[i]] <- factor(as.numeric(df_geda_num[[i]]), levels=as.numeric(col_meta$numLevel), labels=col_meta$numLevel)
         
         
         
@@ -102,12 +101,12 @@ for (i in colnames(df_geda_de)){
         if(sort_order == "DESC"){
           df_geda_de[[i]] <- ordered(df_geda_de[[i]], levels=col_meta[order(-col_meta$numLevel),]$numLevel, labels=col_meta[order(-col_meta$numLevel),]$textLevel)
           df_geda_en[[i]] <- ordered(df_geda_en[[i]], levels=col_meta[order(-col_meta$numLevel),]$numLevel, labels=col_meta[order(-col_meta$numLevel),]$textLabelEn)
-          df_geda_num[[i]] <- ordered(as.numeric(df_geda_num[[i]]), levels=as.numeric(col_meta[order(-col_meta$numLevel),]$numLevel), labels=col_meta[order(-col_meta$numLevel),]$numLevel)
+          # df_geda_num[[i]] <- ordered(as.numeric(df_geda_num[[i]]), levels=as.numeric(col_meta[order(-col_meta$numLevel),]$numLevel), labels=col_meta[order(-col_meta$numLevel),]$numLevel)
           
         }else{
           df_geda_de[[i]] <- ordered(df_geda_de[[i]], levels=col_meta[order(col_meta$numLevel),]$numLevel, labels=col_meta[order(col_meta$numLevel),]$textLevel)
           df_geda_en[[i]] <- ordered(df_geda_en[[i]], levels=col_meta[order(col_meta$numLevel),]$numLevel, labels=col_meta[order(col_meta$numLevel),]$textLabelEn)
-          df_geda_num[[i]] <- ordered(as.numeric(df_geda_num[[i]]), levels=as.numeric(col_meta[order(col_meta$numLevel),]$numLevel), labels=col_meta[order(col_meta$numLevel),]$numLevel)
+          # df_geda_num[[i]] <- ordered(as.numeric(df_geda_num[[i]]), levels=as.numeric(col_meta[order(col_meta$numLevel),]$numLevel), labels=col_meta[order(col_meta$numLevel),]$numLevel)
         }
         
       }
@@ -125,7 +124,7 @@ for (i in colnames(df_geda_de)){
         
           df_geda_de[[i]][df_geda_de[[i]] == l] <- col_meta[col_meta$textLevel == l,]$numLevel
           df_geda_en[[i]][df_geda_en[[i]] == l] <- col_meta[col_meta$textLevel == l,]$numLevel
-          df_geda_num[[i]][df_geda_num[[i]] == l] <- col_meta[col_meta$textLevel == l,]$numLevel
+          df_geda_num[[i]][df_geda_num[[i]] == l] <- as.numeric(col_meta[col_meta$textLevel == l,]$numLevel)
           
         }
         
@@ -134,7 +133,7 @@ for (i in colnames(df_geda_de)){
       # for scale columns, change datatype to numeric 
       df_geda_de[[i]]<- as.numeric(df_geda_de[[i]])
       df_geda_en[[i]]<- as.numeric(df_geda_en[[i]])
-      df_geda_num[[i]]<- as.numeric(df_geda_num[[i]])
+      # df_geda_num[[i]]<- as.numeric(df_geda_num[[i]])
       
     }
       # add variable label, access this with Hmisc-functions like describe(%dataframe%)
@@ -156,7 +155,7 @@ for (i in colnames(df_geda_de)){
 Not only value labels have been added, also variable labels are now included so that the cryptic information is released to human readable text what each variable means. This can only be accessed by Hmisc functions as show below. Two dataframes incl. translated data are avaible and can be loaded for further processing. 
 
 ```{r}
-describe(df_geda_de %>% dplyr::select(KHhyp))
+describe(df_geda_de %>% dplyr::select(GZmehm1))
 
 ```
 
@@ -173,12 +172,4 @@ describe(df_geda_num %>% dplyr::select(KHhyp))
 ```{r}
 save(df_geda_de, df_geda_en, df_geda_num, file = "data/geda_data.RData")
 ```
-
-
-```{r}
-
-# heav_dta <- read_dta("data/GEDA14.dta")
-# labelled::val_labels(heav_dta$sex)
-```
-
 
