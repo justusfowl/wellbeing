@@ -52,7 +52,7 @@ score_life <- lm(GZmehm1NumScore ~ Life_Expectancy , df_LE_noNA)
 ```
 
 ```{r}
-score_life
+summary(score_life)
 ```
 
 
