@@ -15,6 +15,9 @@ library(Hmisc)
 library(readxl)
 library(data.table)
 library(sjlabelled)
+library(e1071)
+library(psych)
+library(OneR)
 
 ```
 
@@ -172,7 +175,78 @@ describe(df_geda_en %>% dplyr::select(KHhyp))
 ```{r}
 describe(df_geda_num %>% dplyr::select(KHhyp))
 ```
+For those variables that contain +50 levels we decided to aggregate those variables into bins to facilitate the use of computational resources. Before binning the variables we debated any potential trade-off with the models predictive power. For example:
 
+1) group the levels that have less than K observations into a new level called 'other'
+
+2) run all the analysis using a subsample. It may be that there is not much difference in predictive power if you use a smaller sample, so you could do all the data mining cycle with less data and just train the final model with the entire sample (which may take a very long time, but you will only have to do that once)
+
+3) use some feature selection technique (e.g. Lasso) after transforming the categorical features into binary features. That would tell you which levels are the less predictive (so you can group those levels together)
+
+We concluded that we would aggregate / bin the variables based on #1. Rather than use K observations we relied on "business knowledge" to aggregate based on periods that made sense (e.g. if the data captures 30min increments, making it 1hr increments)
+
+
+```{r}
+#convert to numericals in order to plot
+df_geda_num$KAtbka_k    <- as.numeric(df_geda_num$KAtbka_k)
+df_geda_num$KAspodauC_k <- as.numeric(df_geda_num$KAspodauC_k)
+df_geda_num$AUarbzD_k   <- as.numeric(df_geda_num$AUarbzD_k)
+df_geda_num$IAkhs_k     <- as.numeric(df_geda_num$IAkhs_k)
+
+#plot
+barplot(table(df_geda_num$KAtbka_k))
+barplot(table(df_geda_num$KAspodauC_k))
+barplot(table(df_geda_num$AUarbzD_k))
+barplot(table(df_geda_num$IAkhs_k))
+```
+
+```{r}
+
+#Before binning we looked at the skewness of the data with the describe function to sanity check if we should "prioritize" certain transformations
+
+#VARIABLE: KAtbka_k:
+#Transportbez. körp. Aktivität in MET/Stunden/Woche (top coding ab 100h)
+#Transportbez. körp. Activity in MET / hours / week (top coding from 100h)
+breakpoint <- c(0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,102)
+breakpoint_level_names <- c(0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48)
+describe(df_geda_num$KAtbka_k) #in order to measure skewness
+df_geda_num$KAtbka_k <- cut(df_geda_num$KAtbka_k, breakpoint, labels = breakpoint_level_names, na.omit = FALSE)
+
+
+#VARIABLE: KAspodauC_k
+#Sport pro Woche insgesamt (in 30 min kategoriesiert)
+#Sports week in total (category Siert in 30 min)
+describe(df_geda_num$KAspodauC_k)
+breakpoint_hour <- c(0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,62)
+breakpoint_hour_level_names <- c(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15)
+df_geda_num$KAspodauC_k <- cut(df_geda_num$KAspodauC_k,breakpoint_hour,labels = breakpoint_hour_level_names,ordered_result = TRUE, is.omit = FALSE)
+
+
+#VARIABLE: AUarbzD_k
+#Krankheitsbedingt nicht zur Arbeit: Wochen
+#not due to illness to work: weeks
+describe(df_geda_num$AUarbzD_k)
+breakpoint_sick <- c(0,1,2,3,4,5,6,7,9,10,11,12,60)
+breakpoint_sick_level_names <- c(0,1,2,3,4,5,6,7,9,10,11,12)
+df_geda_num$AUarbzD_k <- cut(df_geda_num$AUarbzD_k,breakpoint_sick,labels = breakpoint_sick_level_names,ordered_result = TRUE, is.omit = FALSE)
+
+
+#VARIABLE: IAkhs_k
+#Stationär im Krankenhaus i.d.l. 12 Mon.: Anzahl der Nächte (kat)
+#Stationary i.d.l. in hospital 12 month .: Number of nights (cat)
+describe(df_geda_num$IAkhs_k)
+
+### DID NOT BIN GIVEN ONLY ABOUT ~20 LEVELS WERE USED BY THE EXISTING VARIABLES ###
+
+```
+
+```{r}
+#plot the binned variables
+barplot(table(df_geda_num$KAtbka_k))
+barplot(table(df_geda_num$KAspodauC_k))
+barplot(table(df_geda_num$AUarbzD_k))
+barplot(table(df_geda_num$IAkhs_k))
+```
 
 ```{r}
 save(df_geda_de, df_geda_en, df_geda_num, file = "data/geda_data.RData")

@@ -1,0 +1,64 @@
+---
+title: "LifeExpectancyOLS"
+author: "Jerimiah Williams"
+date: "January 13, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+library(dplyr)
+library(tidyr)
+```
+
+# Objective
+
+The following script uses the modified dataset that was used for the DataViz assignment. I created a number score for the GZmehm1 score where 1 is very bad and 5 is very good. I also added life expectancy and age bins to the data set. 
+
+To ensure that the script runs, download the required files from Google drive and put them in the respective directories. 
+
+```{r}
+#read in data file that already has life expectancy added
+
+data_with_LE <- read_csv("data/translated_data2.csv")
+
+
+```
+
+```{r}
+head(data_with_LE)
+```
+
+
+```{r}
+#select only Life_Expectancy, Age_bin and GZmehm1NumScore from dataframe with life expectancy
+
+df_LE <- data_with_LE %>% dplyr::select(c(Age_bin, Life_Expectancy, GZmehm1NumScore))
+
+```
+
+
+```{r}
+df_LE_noNA <- tidyr::drop_na(df_LE)
+```
+
+
+```{r}
+score_life <- lm(GZmehm1NumScore ~ Life_Expectancy , df_LE_noNA)
+```
+
+```{r}
+summary(score_life)
+```
+
+
+
+
+
+
+
+
