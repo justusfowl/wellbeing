@@ -1,0 +1,801 @@
+---
+title: "CausalFeatureEngineering"
+author: "Uli Kaulfuß"
+date: "17 Januar 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(foreign)
+library(readstata13)
+library(dplyr)
+library(naniar)
+library(glmnet)
+require(ggplot2)
+require(MASS)
+require(Hmisc)
+require(reshape2)
+library(cluster)
+library(VIM)
+library(readxl)
+library(gdata)
+
+```
+
+
+```{r}
+load(file = "data/geda_data.RData")
+```
+
+
+Feature engineering: 
+Combining features for causal analysis in accordance with the survey
+
+```{r}
+df_base <- df_geda_num %>% dplyr::select(c(
+KHhyp12, #Bluthochdruck: I.d.l.12 Mon.
+KHhyp, #Bluthochdruck: Jemals ärztlich diagnostiziert
+KHhyp12pB, #Indikator bek. (ärztl. diagn.) Bluthochdruckdruck i.d.l. 12 Mon
+KHhypmedC, #Indikator blutdrucksenkende Mittel bei bekannter Hypertonie
+KHmyo12, #Herzinfarkt: I.d.l. 12 Mon.
+KHkhk12, #Koronare Herzerkrankung/Angina Pectoris: I.d.l.12 Mon.
+KHbbmyo12, #Herzinfarkt/chron. Beschw.: I.d.l. 12 Mon.
+KHhi12, #Herzinsuffizienz: I.d.l.12 Mon.
+KHsa12, #Schlaganfall: I.d.l.12 Mon.
+KHbbsa12, #Schlaganfall/ chron. Beschwerden infolge SA: I.d.l.12 Mon.
+KHdiabB12, #Diabetes: I.d.l.12 Mon.
+KHab12, #Asthma: I.d.l.12 Mon.
+KHkarz12, #Krebserkrankung: I.d.l.12 Mon.
+KHlip12A, #Erhöhte Blutfette/Chol.: I.d.l.12 Mon.
+KHlipA, #Jemals erhöhte Blutfette/Cholesterinw. (Arztdiagnose)
+KHlipmedA, #Erhöhtes Cholesterin: Zurzeit Medikamenteneinnahme
+KHcb12, #Chronische Bronchitis: I.d.l.12 Mon.
+KHulc12, #Magen- oder Zwölffingerdarmgeschwür: I.d.l.12 Mon.
+KHced12, #Chronisch entzündliche Darmerkrankung: I.d.l.12 Mon.
+KHlz12, #Leberzirrhose: I.d.l.12 Mon.
+KHcle12, #Andere chronische Lebererkrankungen: I.d.l.12 Mon.
+KHniB12, #Chron. Nierenprobleme: I.d.l.12 Mon.
+KHdge12, #Arthrose: I.d.l.12 Mon.
+KHra12, #Arthritis: I.d.l.12 Mon.
+KHos12, #Osteoporose: I.d.l.12 Mon.
+KHalgi112, #Allergien: I.d.l. 12 Mon.
+
+GZmehm1, #Allg. Gesundheitszustand
+GZmehm3C, #Chronische Krankheiten
+GZmehm2D, #Einschränkung durch Krankheit seit mind. 6 Monaten
+GZsubj1, #Achten auf Gesundheit
+
+SHseh1, #Brille oder Kontaktlinsen
+SHseh2C, #Schwierigkeiten selbst mit Brille oder Kontaktlinsen
+SHhoer1, #Hörgerät
+SHhoer5, #Schwierigk. selbst mit Hörgerät: Ruhiger Raum
+SHhoer6, #Schwierigk. selbst mit Hörgerät: Lauter Raum
+
+BBmyo12, #Chronische Beschwerden nach Herzinfarkt: I.d.l.12 Mon.
+BBsa12, #Chronische Beschw. infolge eines Schlaganfalls: I.d.l.12 Mon.
+BBdors112, #Beschwerden unterer Rücken: I.d.l.12 Mon.
+BBdors212, #Beschwerden Nacken, Halswirbelsäule: I.d.l.12 Mon.
+BBblas12B, #Harninkontinenz: I.d.l.12 Mon.
+BBgehen, #Schwierigk. beim Laufen ohne Gehhilfe auf 500m
+BBtreppe, #Schwierigk. Treppe mit 12 Stufen
+BBbehB, #Amtlich anerkannte Behinderung 
+BBbehzC_k, #Grad der Behinderung kat.
+
+UVartverkehr, #Verletzung wg. Unfall i.d.l. 12 Monaten: Verkehrsunfall
+UVarthaus, #Verletzung wg. Unfall i.d.l. 12 Monaten: Unfall zu Hause
+UVartfreiz, #Verletzung wg. Unfall i.d.l. 12 Monaten: Unfall in der Freizeit
+UVarztE_k, #Medizinische Versorgung nach Unfall 3 Kat.
+UVarbeit1, #Verletzung Arbeitsunfall: I.d.l. 12 Mon. (kein Wegeunfall)
+UVarbeit2, #Verletzung Arbeitsunfall: medizin. versorgt (kein Wegeunfall)
+
+SEschwA_zz, #Schwanger zur Zeit
+
+LQsf367C, #Stärke Schmerzen i.d.l. 4 Wochen
+LQsf368C, #Behinderung in Alltagstätigkeiten durch Schmerzen i.d.l. 4 Wochen
+LQzufrB10, #Zufriedenheit: Leben insgesamt
+
+PKdep12, #Depression: I.d.l. 12 Mon.
+PKphq1, #Beeintr. i.d.l. 2 Wo.: Wenig Interesse/Freude an Ihren Tätigkeiten
+PKphq2, #Beeintr. i.d.l. 2 Wo.: Niedergeschlagenheit, Schwermut/Hoffnungslosigkeit
+PKphq3, #Beeintr. i.d.l. 2 Wo.: Schwierigk., ein-/durchzuschlafen od. vermehrter Schlaf
+PKphq4, #Beeintr. i.d.l. 2 Wo.: Müdigkeit/Gefühl, k. Energie zu haben
+PKphq5, #Beeintr. i.d.l. 2 Wo.: Vermind. Appetit/übermäßiges Bedürfnis zu essen
+PKphq6, #Beeintr. i.d.l. 2 Wo.: Schlechte Meinung v. sich; Versagen/Familie zu entt.
+PKphq7, #Beeintr. i.d.l. 2 Wo.: Schwierigk., sich zu konzentrieren
+PKphq8, #Beeintr. i.d.l. 2 Wo.: Veränderung in Bewegung oder Sprache
+PKphq8diag, #PHQ-8: Diagnostische Kat.
+
+SFoslo1C, #Nahestehende Personen
+SFoslo2C, #Anteilnahme anderer Personen
+SFoslo3A, #Erhalt von Hilfe
+SFosloA, #Soziale Unterstützung (Oslo-3 Social Support Scale)
+
+IAhypus, #Letzte Blutdruckmessung
+IAcholus, #Letzte Blutfettwertebestimmung
+IAdiabus, #Letzte Blutzuckermessung
+IAtermin, #Auf Untersuchungstermin gewartet i.d.l. 12 Mon.
+IAweg, #Untersuchung verzögert wegen Entfernung i.d.l. 12 Mon.
+IAkosten1, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: Ärztl. US/Behandlung
+IAkosten2, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: Zahnärztl. US/Behandlung
+IAkosten3, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: Verordnete Med.
+IAkosten4, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: US/Behandlung psy. Prob.
+IAarzt14B, #Zahnmedizinische Untersuchung
+IAarzt1B, #Besuch Allgemeinarzt oder Hausarzt
+IAarzt1B4w, #Besuch Allgemeinarzt oder Hausarzt i.d.l. 4 Wochen: Anzahl
+IAarzt1B12_k, #Besuch Allgemeinarzt oder Hausarzt i.d.l. 12 Mon.: Anzahl (top coding 20 oder mehr)
+IAfa, #Besuch Facharzt
+IAfa4w, #Besuch Facharzt i.d.l. 4 Wochen: Anzahl
+IAfa12_k, #Besuch Facharzt i.d.l. 12 Mon.: Anzahl (top coding 20 oder mehr)
+IAarzt8C, #Besuch Psychologen i.d.l. 12 Mon.
+IAkhs, #Stationär im Krankenhaus i.d.l. 12 Mon.
+IAkhs_k, #Stationär im Krankenhaus i.d.l. 12 Mon.: Anzahl der Nächte (kat)
+IAambC, #Tagespatient im Krankenhaus i.d.l. 12 Mon.
+IAambC_k, #Tagespatient im Krankenhaus i.d.l. 12 Mon.: Anzahl der Aufnahmen (top coding 10 oder mehr)
+IAther2B, #Besuch Physiotherapeuten i.d.l. 12 Mon
+IApflege, #Inanspruchnahme häuslicher Pflegedienst: I.d.l. 12 Mon.
+IAkfutyp2B_lz, #Letzter Stuhltest
+IAkfutyp4B_lz, #Letzte Darmspiegelung
+IAkfutyp7B_lz, #Letzte Mammografie
+IAkfutyp7Bgr, #Grund für die letzte Mammografie
+IAkfutyp5B_lz, #Letzter Gebärmutterhalsabstrich
+IAkv1D, #Krankenversicherung in 3 Kat.
+
+IPinfl4, #Letzte Grippeimpfung
+IPinfl4_mm, #Letzte Grippeimpfung: Monat
+IPinfl4_jj, #Letzte Grippeimpfung: Jahr
+IPinfl1415B, #Grippeimpfung Wintersaison 2014/2015, generiert
+IPinfl1314B, #Grippeimpfung Wintersaison 2013/2014 generiert
+IPinfl6B, #Häufigkeit Grippeimpfung, generiert
+IPtet, #Jemals Tetanusimpfung
+IPtet_lz, #Letzte Tetanusimpfung
+
+AMarztB, #Einnahme Medikamente v. Arzt verschrieben i.d.l. 2 Wo
+AMfrei, #Einnahme Medikamente nicht v. Arzt verschrieben i.d.l. 2 Wo
+
+AUarbC, #Krankheitsbedingt nicht zur Arbeit: I.d.l. 12 Mon.
+AUarbzD_k, #Krankheitsbedingt nicht zur Arbeit: Wochen
+
+KAehispaq1, #Tätigkeiten (Anstrengung)
+KAehispaq2, #Bewegung zu Fuß: Tage pro Woche
+KAehispaq3, #Bewegung zu Fuß: Dauer
+KAehispaq4, #Bewegung mit Fahrrad: Tage pro Woche
+KAehispaq5, #Bewegung mit Fahrrad: Dauer
+KAehispaq6, #Sport: Tage pro Woche
+KAspodauC_k, #Sport pro Woche insgesamt (in 30 min kategoriesiert)
+KAehispaq8, #Aufbau/Kräftigung: Tage pro Woche
+KAabka, #Mäßig bis sehr anstrengende arbeitsbez. körp. Aktivität
+KAsabka, #Sehr anstrengende arbeitsbezogene körperliche Aktivität
+KAtbka_k, #Transportbez. körp. Aktivität in MET/Stunden/Woche (top coding ab 100h)
+KAgfka, #Einhalt. aerobe WHO-Bew.empf. (mit Gehen >= 150 Min. aerobe körp. Aktiv./Wo)
+KAgfa, #>= 150 min Ausdaueraktiv.und 2 x/ Woche Aktiv. zur Muskelkräft.(Einhalt. beider WHO-Empf.)
+KAgfka1, #Einhalt. aerobe WHO-Bew.empf. (o. Gehen >= 150 Min. aerobe körp. Aktiv./Wo)
+KAgfmk, #WHO-Empf. zur Muskelkräft. (>= 2x/Wo. Aktivit. zur Muskelkräftigung)
+KAgka, #Ausreichend körp. aktiv während Arbeit oder Freizeit
+KAgka_k, #Gesamtaktivität
+
+ENobstB, #Verzehr von Obst
+ENobstBz1, #Verzehr von Obst: pro Tag
+ENgemB, #Verzehr von Gemüse
+ENgemBz1, #Verzehr von Gemüse: pro Tag
+
+AKoft12_k, #Alkohol i.d.l. 12 Mon. in 6 Kat.
+AKechi47, #Gefährlicher Alkoholkonsum (ECHI 47; > 20/40 g/Tag)
+AKbingeC_k, #Binge-Drinking (>= 6 alk. Getr. bei einer Gelegenheit) in 4 Kat.
+AKrisiko, #Riskanter Alkoholkonsum (>10/20 g/Tag)
+AKrisiko2, #Riskanter Alkoholkonsum (>10/20 g/Tag) 4 Kat.
+
+RCstat, #Rauchen
+RCtyp_m1, #Tabakprodukte: Fabrikfertige Zigaretten
+RCtyp_m2, #Tabakprodukte: Selbstgedrehte Zigaretten
+RCtyp_m3, #Tabakprodukte: Zigarren, Zigarillos
+RCtyp_m4, #Tabakprodukte: Pfeifentabak
+RCtyp_m6, #Tabakprodukte: Sonstiges
+RCtyp_m7, #Tabakprodukte: E-Zigarette
+RCtyphaupt, #Hauptsächlich gerauchtes Takabprodukt
+RCzA_ttk, #Tgl. Raucher: Tgl. Anzahl Zigaretten (kat.)
+RCz2B_ttk, #Selbstgedrehte Zigaretten täglich: Anzahl (kat.)
+RCzA_wwk, #Zigaretten wöchentlich Anzahl (kat.)
+RCz2B_wwk, #Selbstgedrehte Zigaretten wöchentlich: Anzahl (kat,)
+RC_ak, #Beginn Rauchen: Alter (kat.)
+RCex_ak, #Ende Rauchen: Alter (kat.)
+RCpass4, #Rauchen in geschlossenen Räumen
+RCpassort_m2, #Passivrauchen: zu Hause
+RCpassort_m1, #Passivrauchen: Arbeit
+RCpassort_m7, #Passivrauchen: öffentl. Gebäude
+RCpassort_m4, #Passivrauchen: Restaurant
+RCpassort_m3, #Passivrauchen: Kneipen/Cafés/Bars/Disco
+RCpassort_m5, #Passivrauchen: Freunden/Bekannten
+RCpassort_m6, #Passivrauchen: Anderen Ort
+
+GVasku1, #Verlass auf eig. Fähigkeiten in schwier. Situationen
+
+ABtragen, #Heben und/oder Tragen von schweren Lasten 
+ABschichtC, #Schicht- oder Nachtarbeit
+ABsubjB, #Gesundheit durch Arbeit gefährdet
+
+BLpflege2C, #Unterstützung/Pflege anderer Personen
+BLpflegedauB, #Unterstützung/Pflege: Stunden pro Woche
+
+
+
+PAfam3, #Zusammenleben in Ehe oder eheähnlicher Gemeinschaft
+PAhh_k, #Anzahl Personen im Haushalt (kat.)
+PAhhtype, #Haushaltstyp
+PAgroe, #Körpergröße (Selbstangabe) [cm]
+PAgewiB, #Körpergewicht (Selbstangabe) [kg]
+PAbmiB_k, #BMI-Gruppierung (aus Selbstangabe)
+PAbmiB_k2, #BMI-Gruppierung detaill. (aus Selbstangabe)
+PAueberB, #Übergewicht nach WHO (BMI>=25; aus Selbstangabe)
+PAadiposB, #Adipositas nach WHO (BMI>=30; aus Selbstangabe)
+
+SDaeqeink_k, #Äquivalenzeinkommen (imputiert,kat) [€]
+SDses, #Sozioökonomischer Status (SES)
+SDhhincomez, #Monatl. HH-Nettoeinkommen in Quintilen (imputiert)
+SDbild1D, #Höchster allg. bildener Schulabschluss
+SDbild4C, #Höchster berufl. Ausbildungs- oder Hochschul/Fachhochschulabschluss
+SDbest_lz, #Berufliche Stellung in letzter Haupterwerbstätigkeit
+SDbverh, #Art des letzten Beschäftigungsverhältnisses
+SDfuehr, #Letzte Tätigkeit überwiegend als Führungs- Aufsichtskraft
+SDbest, #Berufliche Stellung in Haupterwerbstätigkeit
+SDbverh2, #Art des Beschäftigungsverhältnisses
+SDfuehr2, #Tätigkeit überwiegend als Führungs- Aufsichtskraft
+SDjobstat, #Stellung im Beruf
+SDetoed, #Haupterwerbstätigkeit im öffentl. Dienst
+SDhvtypD, #Hauptverdiener im Haushalt
+SDft_pt, #Voll- oder Teilzeit erwerbstätig
+SDerwt0a, #Lebenssituation derzeit
+SDalo, #Arbeitslos i.d.l. 5 Jahren
+SDalo_mmk, #Arbeitslos: Monate insgesamt i.d.l. 5 Jahren (kat.)
+SDalokh, #Arbeitslosigkeit mit Erkrankung zu tun
+SDalogz, #Veränderung der Gesundheit durch Arbeitslosigkeit
+
+
+sex, #Geschlecht
+age5B, #Alter (5-Jahres-Gruppen)
+MIbirthplace, #Geburtsland (EHIS)
+MIcitizen, #Staatsangehörigkeit
+bula, #Bundesland
+wob #West/Ost/Berlin
+))
+```
+
+#### Initially we want to set a baseline analysis of overall drivers for wellbeing crossing the entire population in Germany
+
+```{r}
+df_overall <- data.frame(df_base)
+```
+
+combine feature "how many portions do you eat vegies/fruit per day in a week?"
+
+```{r}
+# people that have 4 to 6 portions of fruit per week have (coded = 2) on average 5 portions per week => 5 portions / 7 days in a week
+df_overall[df_overall$ENobstB == 2 & !is.na(df_overall$ENobstBz1),]$ENobstBz1 = round(5/7,2)
+df_overall[df_overall$ENobstB == 3 & !is.na(df_overall$ENobstBz1),]$ENobstBz1 = round(2/7,2)
+df_overall[df_overall$ENobstB == 4 & !is.na(df_overall$ENobstBz1),]$ENobstBz1 = round(1/7,2)
+df_overall[df_overall$ENobstB == 5 & !is.na(df_overall$ENobstBz1),]$ENobstBz1 = 0
+
+df_overall$ENobstBz1 <- as.numeric(df_overall$ENobstBz1)
+
+# deselect the question 
+df_overall<- df_overall %>% dplyr::select(-ENobstB)
+```
+
+Do the same with veggies.
+
+```{r}
+# people that have 4 to 6 portions of vegies per week have (coded = 2) on average 5 portions per week => 5 portions / 7 days in a week
+df_overall[df_overall$ENgemB == 2 & !is.na(df_overall$ENgemBz1),]$ENgemBz1 = round(5/7,2)
+df_overall[df_overall$ENgemB == 3 & !is.na(df_overall$ENgemBz1),]$ENgemBz1 = round(2/7,2)
+df_overall[df_overall$ENgemB == 4 & !is.na(df_overall$ENgemBz1),]$ENgemBz1 = round(1/7,2)
+df_overall[df_overall$ENgemB == 5 & !is.na(df_overall$ENgemBz1),]$ENgemBz1 = 0
+
+df_overall$ENgemBz1 <- as.numeric(df_overall$ENgemBz1)
+
+# deselect the question 
+df_overall<- df_overall %>% dplyr::select(-ENgemB)
+```
+
+remove detailed questions on passive smoking 
+
+```{r}
+
+df_overall<- df_overall %>% dplyr::select(-c(
+  RCpass4, #Rauchen in geschlossenen Räumen
+  RCpassort_m2, #Passivrauchen: zu Hause
+  RCpassort_m1, #Passivrauchen: Arbeit
+  RCpassort_m7, #Passivrauchen: öffentl. Gebäude
+  RCpassort_m4, #Passivrauchen: Restaurant
+  RCpassort_m3, #Passivrauchen: Kneipen/Cafés/Bars/Disco
+  RCpassort_m5, #Passivrauchen: Freunden/Bekannten
+  RCpassort_m6 #Passivrauchen: Anderen Ort
+))
+
+```
+
+
+
+In this overall dataframe, how many missing data do we have?
+
+```{r}
+
+mice_plot <- aggr(df_overall, col=c('navyblue','yellow'),
+                    numbers=TRUE, sortVars=TRUE,
+                    labels=names(df_overall), cex.axis=.7,
+                    gap=3, ylab=c("Missing data","Pattern"))
+
+df_miss <- mice_plot$missings[order(-mice_plot$missings$Count),]
+df_miss$perc <- df_miss$Count/nrow(df_overall)
+
+```
+
+Remove variables that are not representing the overall population well due to missing data  / edge cases
+
+* Exclude the variable about the degree of impairment [BBbehzC_k]
+
+```{r, echo=F}
+df_overall <- df_overall %>% dplyr::select(-BBbehzC_k)
+```
+
+* Exclude the variable about the ability to hear despite wearing hearing aids [SHhoer6, SHhoer5]; this is too specific for general assessment
+
+```{r, echo=F}
+df_overall <- df_overall %>% dplyr::select(-c(SHhoer6, SHhoer5))
+```
+
+* Exclude the date info about the last influence vaccination [IPinfl4_mm, IPinfl4_jj]
+
+```{r, echo=F}
+df_overall <- df_overall %>% dplyr::select(-c(IPinfl4_mm, IPinfl4_jj))
+```
+
+* Exclude the date info about the Professional status [SDjobstat]
+
+```{r, echo=F}
+df_overall <- df_overall %>% dplyr::select(-c(SDjobstat))
+```
+
+* Exclude details about being unemployed [SDalo_mmk, SDalokh, SDalokh, SDalogz]
+
+```{r, echo=F}
+df_overall <- df_overall %>% dplyr::select(-c(SDalo_mmk, SDalokh, SDalokh, SDalogz))
+```
+
+##### Focus only on complete cases
+
+```{r}
+
+valid_cases <- complete.cases(df_overall)
+df_overall_analysis <- df_overall[valid_cases,]
+
+```
+
+##### Ensuring the correct encoding as factors in line with the meta data
+
+Load meta data from the data dictionary as it has been prepared in XLS
+
+```{r}
+df_meta_lvls <- read_excel("data.doc/GEDA14_Variablenuebersicht_Analyse.xlsx", sheet='levels')
+df_meta_lvls$numLevel <- as.numeric(df_meta_lvls$numLevel)
+```
+
+Right-coding 
+
+```{r}
+u <- data.frame(df_overall_analysis)
+```
+
+```{r}
+df_overall_analysis <- data.frame(u)
+```
+
+
+```{r}
+
+for (i in colnames(df_overall_analysis)){
+  
+  col_meta <- df_meta_lvls[df_meta_lvls$Varname == i,]
+  
+  col_type <- col_meta[1,]$Type
+  
+  if(nrow(col_meta) > 0){
+    
+    print(paste("variable: ", i))
+    
+    if (col_type == 'Nominal' |col_type == 'Ordinal' ){
+      
+      unique_lvls <- unique(df_geda_de[[i]])
+      
+      # for text columns, change data to factors 
+      
+      df_overall_analysis[[i]] <- factor(df_overall_analysis[[i]], levels=col_meta$numLevel, labels=col_meta$numLevel)
+      
+    }else if (col_type == "Scale"){
+      
+      unique_lvls <- unique(col_meta)
+      
+      for (row_it in 1:nrow(col_meta)){
+        
+        l <- col_meta[row_it,]$textLevel
+        
+        if (!is.na(l) & l != ""){
+        
+          df_overall_analysis[[i]][df_overall_analysis[[i]] == l] <- col_meta[col_meta$textLevel == l,]$numLevel
+          
+        }
+        
+      }
+      
+      # for scale columns, change datatype to numeric 
+      df_overall_analysis[[i]]<- as.numeric(df_overall_analysis[[i]])
+      
+    }
+      # add variable label, access this with Hmisc-functions like describe(%dataframe%)
+      
+      label(df_overall_analysis[[i]]) <- col_meta[1,]$VarLabel
+      
+      
+  }else{
+    print(paste(i, ": type: ", col_type))
+  }
+  
+}
+
+
+```
+
+```{r}
+# ensuring that response is an ordered factor
+
+col_meta <- df_meta_lvls[df_meta_lvls$Varname == 'GZmehm1',]
+
+df_overall_analysis$GZmehm1 <- ordered(df_overall_analysis$GZmehm1, levels=col_meta[order(col_meta$numLevel),]$numLevel, labels=col_meta[order(col_meta$numLevel),]$numLevel)
+
+
+```
+
+
+##
+```{r}
+
+set.seed(1234)
+
+df_tmp <- df_overall_analysis
+
+for (c in colnames(df_pred)){
+  df_pred[[c]] <- drop.levels(df_pred[[c]])
+}
+
+m <- polr(GZmehm1 ~ ., data = df_tmp, Hess=TRUE)
+
+## view a summary of the model
+summary(m)
+```
+
+
+```{r}
+
+library(VGAM)
+m <- vglm(GZmehm1 ~ ., data = df_tmp, family = cumulative(link = "logit", parallel = FALSE, reverse = TRUE))
+summary(m)
+```
+
+
+
+
+
+```{r}
+
+failed_cols <- c()
+res <- c()
+
+df_pred <- data.frame(df_overall_analysis)
+
+for (c in colnames(df_pred)){
+  df_pred[[c]] <- drop.levels(df_pred[[c]])
+}
+
+#ncol(df_pred)
+for (i in 4:10){
+
+  curr_cols <- colnames(df_pred)[1:i]
+  
+  print(paste("Processing, additional column: ",  colnames(df_pred)[i:i]))
+  
+  
+  for (j in 1:length(curr_cols)){
+    if (curr_cols[j] %in% failed_cols){
+      curr_cols <- curr_cols[-j]
+      }
+  }
+  
+  curr_cols <- append(curr_cols, "GZmehm1")
+  
+  
+  df_tmp <- df_pred %>% dplyr::select(curr_cols)
+  
+  result <- tryCatch({
+      # m <- polr(GZmehm1 ~ ., data = df_tmp, Hess=TRUE)
+      m <- vglm(GZmehm1 ~ ., data = df_tmp, family = cumulative(link = "logit", parallel = TRUE, reverse = TRUE))
+      
+  }, error = function(e) {
+      print(e)
+      print(paste0("Failing column: ", colnames(df_pred)[i:i]))
+      failed_cols <- append(failed_cols, colnames(df_pred)[i:i])
+  }, finally = {
+     
+  })
+  
+  # result$curr_cols <- curr_cols
+  # res[[paste0("model_",i)]] <- result
+
+}
+
+
+```
+
+
+
+
+
+## Manual creating some models and incrementing new columns
+
+```{r}
+df_base <- df_geda_num %>% dplyr::select(c(
+KHhyp12, #Bluthochdruck: I.d.l.12 Mon.
+KHhyp, #Bluthochdruck: Jemals ärztlich diagnostiziert
+KHhyp12pB, #Indikator bek. (ärztl. diagn.) Bluthochdruckdruck i.d.l. 12 Mon
+KHhypmedC, #Indikator blutdrucksenkende Mittel bei bekannter Hypertonie
+KHmyo12, #Herzinfarkt: I.d.l. 12 Mon.
+KHkhk12, #Koronare Herzerkrankung/Angina Pectoris: I.d.l.12 Mon.
+KHbbmyo12, #Herzinfarkt/chron. Beschw.: I.d.l. 12 Mon.
+KHhi12, #Herzinsuffizienz: I.d.l.12 Mon.
+KHsa12, #Schlaganfall: I.d.l.12 Mon.
+KHbbsa12, #Schlaganfall/ chron. Beschwerden infolge SA: I.d.l.12 Mon.
+KHdiabB12, #Diabetes: I.d.l.12 Mon.
+KHab12, #Asthma: I.d.l.12 Mon.
+KHkarz12, #Krebserkrankung: I.d.l.12 Mon.
+KHlip12A, #Erhöhte Blutfette/Chol.: I.d.l.12 Mon.
+KHlipA, #Jemals erhöhte Blutfette/Cholesterinw. (Arztdiagnose)
+KHlipmedA, #Erhöhtes Cholesterin: Zurzeit Medikamenteneinnahme
+KHcb12, #Chronische Bronchitis: I.d.l.12 Mon.
+KHulc12, #Magen- oder Zwölffingerdarmgeschwür: I.d.l.12 Mon.
+KHced12, #Chronisch entzündliche Darmerkrankung: I.d.l.12 Mon.
+KHlz12, #Leberzirrhose: I.d.l.12 Mon.
+KHcle12, #Andere chronische Lebererkrankungen: I.d.l.12 Mon.
+KHniB12, #Chron. Nierenprobleme: I.d.l.12 Mon.
+KHdge12, #Arthrose: I.d.l.12 Mon.
+KHra12, #Arthritis: I.d.l.12 Mon.
+KHos12, #Osteoporose: I.d.l.12 Mon.
+KHalgi112, #Allergien: I.d.l. 12 Mon.
+
+GZmehm1, #Allg. Gesundheitszustand
+GZmehm3C, #Chronische Krankheiten
+GZmehm2D, #Einschränkung durch Krankheit seit mind. 6 Monaten
+GZsubj1, #Achten auf Gesundheit
+
+SHseh1, #Brille oder Kontaktlinsen
+SHseh2C, #Schwierigkeiten selbst mit Brille oder Kontaktlinsen
+SHhoer1, #Hörgerät
+SHhoer5, #Schwierigk. selbst mit Hörgerät: Ruhiger Raum
+SHhoer6, #Schwierigk. selbst mit Hörgerät: Lauter Raum
+
+BBmyo12, #Chronische Beschwerden nach Herzinfarkt: I.d.l.12 Mon.
+BBsa12, #Chronische Beschw. infolge eines Schlaganfalls: I.d.l.12 Mon.
+BBdors112, #Beschwerden unterer Rücken: I.d.l.12 Mon.
+BBdors212, #Beschwerden Nacken, Halswirbelsäule: I.d.l.12 Mon.
+BBblas12B, #Harninkontinenz: I.d.l.12 Mon.
+BBgehen, #Schwierigk. beim Laufen ohne Gehhilfe auf 500m
+BBtreppe, #Schwierigk. Treppe mit 12 Stufen
+BBbehB, #Amtlich anerkannte Behinderung 
+BBbehzC_k, #Grad der Behinderung kat.
+
+UVartverkehr, #Verletzung wg. Unfall i.d.l. 12 Monaten: Verkehrsunfall
+UVarthaus, #Verletzung wg. Unfall i.d.l. 12 Monaten: Unfall zu Hause
+UVartfreiz, #Verletzung wg. Unfall i.d.l. 12 Monaten: Unfall in der Freizeit
+UVarztE_k, #Medizinische Versorgung nach Unfall 3 Kat.
+UVarbeit1, #Verletzung Arbeitsunfall: I.d.l. 12 Mon. (kein Wegeunfall)
+UVarbeit2, #Verletzung Arbeitsunfall: medizin. versorgt (kein Wegeunfall)
+
+SEschwA_zz, #Schwanger zur Zeit
+
+LQsf367C, #Stärke Schmerzen i.d.l. 4 Wochen
+LQsf368C, #Behinderung in Alltagstätigkeiten durch Schmerzen i.d.l. 4 Wochen
+LQzufrB10, #Zufriedenheit: Leben insgesamt
+
+PKdep12, #Depression: I.d.l. 12 Mon.
+PKphq1, #Beeintr. i.d.l. 2 Wo.: Wenig Interesse/Freude an Ihren Tätigkeiten
+PKphq2, #Beeintr. i.d.l. 2 Wo.: Niedergeschlagenheit, Schwermut/Hoffnungslosigkeit
+PKphq3, #Beeintr. i.d.l. 2 Wo.: Schwierigk., ein-/durchzuschlafen od. vermehrter Schlaf
+PKphq4, #Beeintr. i.d.l. 2 Wo.: Müdigkeit/Gefühl, k. Energie zu haben
+PKphq5, #Beeintr. i.d.l. 2 Wo.: Vermind. Appetit/übermäßiges Bedürfnis zu essen
+PKphq6, #Beeintr. i.d.l. 2 Wo.: Schlechte Meinung v. sich; Versagen/Familie zu entt.
+PKphq7, #Beeintr. i.d.l. 2 Wo.: Schwierigk., sich zu konzentrieren
+PKphq8, #Beeintr. i.d.l. 2 Wo.: Veränderung in Bewegung oder Sprache
+PKphq8diag, #PHQ-8: Diagnostische Kat.
+
+SFoslo1C, #Nahestehende Personen
+SFoslo2C, #Anteilnahme anderer Personen
+SFoslo3A, #Erhalt von Hilfe
+SFosloA, #Soziale Unterstützung (Oslo-3 Social Support Scale)
+
+IAhypus, #Letzte Blutdruckmessung
+IAcholus, #Letzte Blutfettwertebestimmung
+IAdiabus, #Letzte Blutzuckermessung
+IAtermin, #Auf Untersuchungstermin gewartet i.d.l. 12 Mon.
+IAweg, #Untersuchung verzögert wegen Entfernung i.d.l. 12 Mon.
+IAkosten1, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: Ärztl. US/Behandlung
+IAkosten2, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: Zahnärztl. US/Behandlung
+IAkosten3, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: Verordnete Med.
+IAkosten4, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: US/Behandlung psy. Prob.
+IAarzt14B, #Zahnmedizinische Untersuchung
+IAarzt1B, #Besuch Allgemeinarzt oder Hausarzt
+IAarzt1B4w, #Besuch Allgemeinarzt oder Hausarzt i.d.l. 4 Wochen: Anzahl
+IAarzt1B12_k, #Besuch Allgemeinarzt oder Hausarzt i.d.l. 12 Mon.: Anzahl (top coding 20 oder mehr)
+IAfa, #Besuch Facharzt
+IAfa4w, #Besuch Facharzt i.d.l. 4 Wochen: Anzahl
+IAfa12_k, #Besuch Facharzt i.d.l. 12 Mon.: Anzahl (top coding 20 oder mehr)
+IAarzt8C, #Besuch Psychologen i.d.l. 12 Mon.
+IAkhs, #Stationär im Krankenhaus i.d.l. 12 Mon.
+IAkhs_k, #Stationär im Krankenhaus i.d.l. 12 Mon.: Anzahl der Nächte (kat)
+IAambC, #Tagespatient im Krankenhaus i.d.l. 12 Mon.
+IAambC_k, #Tagespatient im Krankenhaus i.d.l. 12 Mon.: Anzahl der Aufnahmen (top coding 10 oder mehr)
+IAther2B, #Besuch Physiotherapeuten i.d.l. 12 Mon
+IApflege, #Inanspruchnahme häuslicher Pflegedienst: I.d.l. 12 Mon.
+IAkfutyp2B_lz, #Letzter Stuhltest
+IAkfutyp4B_lz, #Letzte Darmspiegelung
+IAkfutyp7B_lz, #Letzte Mammografie
+IAkfutyp7Bgr, #Grund für die letzte Mammografie
+IAkfutyp5B_lz, #Letzter Gebärmutterhalsabstrich
+IAkv1D, #Krankenversicherung in 3 Kat.
+
+IPinfl4, #Letzte Grippeimpfung
+IPinfl4_mm, #Letzte Grippeimpfung: Monat
+IPinfl4_jj, #Letzte Grippeimpfung: Jahr
+IPinfl1415B, #Grippeimpfung Wintersaison 2014/2015, generiert
+IPinfl1314B, #Grippeimpfung Wintersaison 2013/2014 generiert
+IPinfl6B, #Häufigkeit Grippeimpfung, generiert
+IPtet, #Jemals Tetanusimpfung
+IPtet_lz, #Letzte Tetanusimpfung
+
+AMarztB, #Einnahme Medikamente v. Arzt verschrieben i.d.l. 2 Wo
+AMfrei, #Einnahme Medikamente nicht v. Arzt verschrieben i.d.l. 2 Wo
+
+AUarbC, #Krankheitsbedingt nicht zur Arbeit: I.d.l. 12 Mon.
+AUarbzD_k, #Krankheitsbedingt nicht zur Arbeit: Wochen
+
+KAehispaq1, #Tätigkeiten (Anstrengung)
+KAehispaq2, #Bewegung zu Fuß: Tage pro Woche
+KAehispaq3, #Bewegung zu Fuß: Dauer
+KAehispaq4, #Bewegung mit Fahrrad: Tage pro Woche
+KAehispaq5, #Bewegung mit Fahrrad: Dauer
+KAehispaq6, #Sport: Tage pro Woche
+KAspodauC_k, #Sport pro Woche insgesamt (in 30 min kategoriesiert)
+KAehispaq8, #Aufbau/Kräftigung: Tage pro Woche
+KAabka, #Mäßig bis sehr anstrengende arbeitsbez. körp. Aktivität
+KAsabka, #Sehr anstrengende arbeitsbezogene körperliche Aktivität
+KAtbka_k, #Transportbez. körp. Aktivität in MET/Stunden/Woche (top coding ab 100h)
+KAgfka, #Einhalt. aerobe WHO-Bew.empf. (mit Gehen >= 150 Min. aerobe körp. Aktiv./Wo)
+KAgfa, #>= 150 min Ausdaueraktiv.und 2 x/ Woche Aktiv. zur Muskelkräft.(Einhalt. beider WHO-Empf.)
+KAgfka1, #Einhalt. aerobe WHO-Bew.empf. (o. Gehen >= 150 Min. aerobe körp. Aktiv./Wo)
+KAgfmk, #WHO-Empf. zur Muskelkräft. (>= 2x/Wo. Aktivit. zur Muskelkräftigung)
+KAgka, #Ausreichend körp. aktiv während Arbeit oder Freizeit
+KAgka_k, #Gesamtaktivität
+
+ENobstB, #Verzehr von Obst
+ENobstBz1, #Verzehr von Obst: pro Tag
+ENgemB, #Verzehr von Gemüse
+ENgemBz1, #Verzehr von Gemüse: pro Tag
+
+AKoft12_k, #Alkohol i.d.l. 12 Mon. in 6 Kat.
+AKechi47, #Gefährlicher Alkoholkonsum (ECHI 47; > 20/40 g/Tag)
+AKbingeC_k, #Binge-Drinking (>= 6 alk. Getr. bei einer Gelegenheit) in 4 Kat.
+AKrisiko, #Riskanter Alkoholkonsum (>10/20 g/Tag)
+AKrisiko2, #Riskanter Alkoholkonsum (>10/20 g/Tag) 4 Kat.
+
+RCstat, #Rauchen
+RCtyp_m1, #Tabakprodukte: Fabrikfertige Zigaretten
+RCtyp_m2, #Tabakprodukte: Selbstgedrehte Zigaretten
+RCtyp_m3, #Tabakprodukte: Zigarren, Zigarillos
+RCtyp_m4, #Tabakprodukte: Pfeifentabak
+RCtyp_m6, #Tabakprodukte: Sonstiges
+RCtyp_m7, #Tabakprodukte: E-Zigarette
+RCtyphaupt, #Hauptsächlich gerauchtes Takabprodukt
+RCzA_ttk, #Tgl. Raucher: Tgl. Anzahl Zigaretten (kat.)
+RCz2B_ttk, #Selbstgedrehte Zigaretten täglich: Anzahl (kat.)
+RCzA_wwk, #Zigaretten wöchentlich Anzahl (kat.)
+RCz2B_wwk, #Selbstgedrehte Zigaretten wöchentlich: Anzahl (kat,)
+RC_ak, #Beginn Rauchen: Alter (kat.)
+RCex_ak, #Ende Rauchen: Alter (kat.)
+RCpass4, #Rauchen in geschlossenen Räumen
+RCpassort_m2, #Passivrauchen: zu Hause
+RCpassort_m1, #Passivrauchen: Arbeit
+RCpassort_m7, #Passivrauchen: öffentl. Gebäude
+RCpassort_m4, #Passivrauchen: Restaurant
+RCpassort_m3, #Passivrauchen: Kneipen/Cafés/Bars/Disco
+RCpassort_m5, #Passivrauchen: Freunden/Bekannten
+RCpassort_m6, #Passivrauchen: Anderen Ort
+
+GVasku1, #Verlass auf eig. Fähigkeiten in schwier. Situationen
+
+ABtragen, #Heben und/oder Tragen von schweren Lasten 
+ABschichtC, #Schicht- oder Nachtarbeit
+ABsubjB, #Gesundheit durch Arbeit gefährdet
+
+BLpflege2C, #Unterstützung/Pflege anderer Personen
+BLpflegedauB, #Unterstützung/Pflege: Stunden pro Woche
+
+
+
+PAfam3, #Zusammenleben in Ehe oder eheähnlicher Gemeinschaft
+PAhh_k, #Anzahl Personen im Haushalt (kat.)
+PAhhtype, #Haushaltstyp
+PAgroe, #Körpergröße (Selbstangabe) [cm]
+PAgewiB, #Körpergewicht (Selbstangabe) [kg]
+PAbmiB_k, #BMI-Gruppierung (aus Selbstangabe)
+PAbmiB_k2, #BMI-Gruppierung detaill. (aus Selbstangabe)
+PAueberB, #Übergewicht nach WHO (BMI>=25; aus Selbstangabe)
+PAadiposB, #Adipositas nach WHO (BMI>=30; aus Selbstangabe)
+
+SDaeqeink_k, #Äquivalenzeinkommen (imputiert,kat) [€]
+SDses, #Sozioökonomischer Status (SES)
+SDhhincomez, #Monatl. HH-Nettoeinkommen in Quintilen (imputiert)
+SDbild1D, #Höchster allg. bildener Schulabschluss
+SDbild4C, #Höchster berufl. Ausbildungs- oder Hochschul/Fachhochschulabschluss
+SDbest_lz, #Berufliche Stellung in letzter Haupterwerbstätigkeit
+SDbverh, #Art des letzten Beschäftigungsverhältnisses
+SDfuehr, #Letzte Tätigkeit überwiegend als Führungs- Aufsichtskraft
+SDbest, #Berufliche Stellung in Haupterwerbstätigkeit
+SDbverh2, #Art des Beschäftigungsverhältnisses
+SDfuehr2, #Tätigkeit überwiegend als Führungs- Aufsichtskraft
+SDjobstat, #Stellung im Beruf
+SDetoed, #Haupterwerbstätigkeit im öffentl. Dienst
+SDhvtypD, #Hauptverdiener im Haushalt
+SDft_pt, #Voll- oder Teilzeit erwerbstätig
+SDerwt0a, #Lebenssituation derzeit
+SDalo, #Arbeitslos i.d.l. 5 Jahren
+SDalo_mmk, #Arbeitslos: Monate insgesamt i.d.l. 5 Jahren (kat.)
+SDalokh, #Arbeitslosigkeit mit Erkrankung zu tun
+SDalogz, #Veränderung der Gesundheit durch Arbeitslosigkeit
+
+
+sex, #Geschlecht
+age5B, #Alter (5-Jahres-Gruppen)
+MIbirthplace, #Geburtsland (EHIS)
+MIcitizen, #Staatsangehörigkeit
+bula, #Bundesland
+wob #West/Ost/Berlin
+))
+```
+
+TODO!! hier einfach mal ein block variablen nach dem anderen dem modell zufügen 
+
+
+```{r}
+curr_cols <- df_pred %>% dplyr::select(c(
+  sex, #Geschlecht
+  age5B, #Alter (5-Jahres-Gruppen)
+  MIbirthplace, #Geburtsland (EHIS)
+  MIcitizen, #Staatsangehörigkeit
+  bula, #Bundesland
+  wob #West/Ost/Berlin
+))
+
+curr_cols <- append(curr_cols, "GZmehm1")
+
+df_tmp <- df_pred %>% dplyr::select(curr_cols) %>% mutate_all(as.numeric)
+
+m <- vglm(GZmehm1 ~ ., data = df_tmp, family = cumulative(link = "logit", parallel = TRUE, reverse = TRUE))
+```
+
+
+
+```{r}
+library(fastDummies)
+df_tmp2 <- df_pred %>% dplyr::select(curr_cols)
+```
+
+```{r}
+describe(df_geda_en$GZmehm1)
+```
