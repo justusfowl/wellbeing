@@ -53,6 +53,8 @@ df_geda_de <- GEDA14_Export_text # %>% dplyr::select(c(sex, GZmehm1, GZmehm3C, P
 df_geda_en <- copy(df_geda_de)
 df_geda_num <- copy(df_geda_de)
 
+
+
 for (i in colnames(df_geda_de)){
   
   col_meta <- df_meta_lvls[df_meta_lvls$Varname == i,]
@@ -174,5 +176,9 @@ describe(df_geda_num %>% dplyr::select(KHhyp))
 
 ```{r}
 save(df_geda_de, df_geda_en, df_geda_num, file = "data/geda_data.RData")
+```
+
+```{r}
+write.csv(df_geda_num, "20012020_df_geda_num.csv")
 ```
 
