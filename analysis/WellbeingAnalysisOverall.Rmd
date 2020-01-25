@@ -675,30 +675,30 @@ confusionMatrix(predictedClass, testData$GZmehm1)
 
 # Evaluatinon of different methods:
 
-@TODO: Compare different models types 
+# @TODO: Compare different models types 
 
 ## Multinomial model 
-source: https://data.library.virginia.edu/fitting-and-interpreting-a-proportional-odds-model/
+# source: https://data.library.virginia.edu/fitting-and-interpreting-a-proportional-odds-model/
   
 
-trainingRows <- sample(1:nrow(df_tmp), 0.8 * nrow(df_tmp))
-trainingData <- df_tmp[trainingRows, ]
-testData <- df_tmp[-trainingRows, ]
+#trainingRows <- sample(1:nrow(df_tmp), 0.8 * nrow(df_tmp))
+#trainingData <- df_tmp[trainingRows, ]
+# testData <- df_tmp[-trainingRows, ]
 
 
-mlm <- multinom(GZmehm1 ~ sex+age5B+bula+PAgroe+KHhyp, data = trainingData)
+# mlm <- multinom(GZmehm1 ~ ., data = trainingData)
 # 
-# mlm <- nnet(GZmehm1 ~ sex+age5B+bula+PAgroe+KHhyp, data = trainingData,family="multinomial",size = 5574900,MaxNWts =10000000)
-m_sample <- polr(GZmehm1 ~ sex+age5B+bula+PAgroe+KHhyp, data = trainingData, Hess=TRUE)
+mlm <- nnet(GZmehm1 ~ ., data = trainingData,family="multinomial",size = 557490000,MaxNWts =100000000)
+# m_sample <- polr(GZmehm1 ~ sex+age5B+bula+PAgroe+KHhyp, data = trainingData, Hess=TRUE)
 
-M1 <- logLik(m_sample)
+M1 <- logLik(m)
 M2 <- logLik(mlm)
-G <- -2*(M1[1] - M2[1])
+(G <- -2*(M1[1] - M2[1]))
 
 
 # run chi-squared test
 # hint: https://rpubs.com/mpfoley73/460935 
-@Interpret Chi-squared P-value -> high = the fit of both models is different from one another.
+# @Interpret Chi-squared P-value -> high = the fit of both models is different from one another.
 
 pchisq(G,3,lower.tail = FALSE)
 ```
