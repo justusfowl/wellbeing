@@ -40,7 +40,7 @@ The response variable GZmehm1 is a rating of individual wellbeing on a 5-step sc
 
 ```{r, echo=F}
 load(file = "data/geda_data.RData")
-hist(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1), breaks=5, main="Histogram of the wellbeing score (response)", xlab="1=very bad | 5=very good")
+hist(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1), breaks=.5:5.5, main="Histogram of the wellbeing score (response)", xlab="1=very bad | 5=very good")
 ```
 
 
