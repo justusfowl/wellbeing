@@ -10,3 +10,5 @@ analysis/local/
 
 *.RData
 .Rproj.user
+
+analysis/*.csv

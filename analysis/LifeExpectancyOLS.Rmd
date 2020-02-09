@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(readr)
 library(dplyr)
 library(tidyr)
+library(ggplot2)
 ```
 
 # Objective
@@ -32,15 +33,50 @@ data_with_LE <- read_csv("data/translated_data2.csv")
 ```{r}
 head(data_with_LE)
 ```
+
+```{r}
+#df_geda_num <- df_geda_num %>% select(1:270)
+df_geda_num$ObservationID <- rownames(df_geda_num)
+df_geda_num <- df_geda_num %>% select(ObservationID, everything())
+df_geda_num <- as.data.frame(sapply(df_geda_num, as.numeric))
+
+```
+
 ```{r}
 head(df_geda_num)
 ```
 
 ```{r}
-#select only Life_Expectancy, Age_bin and GZmehm1NumScore from dataframe with life expectancy
+#create unique identifiers to join life expectancy to df_geda_num by creating observationID column and select only ObservationID, Life_Expectancy, and Age_bin and from data_with_LE
 
-df_LE <- data_with_LE %>% dplyr::select(c(Age_bin, Life_Expectancy, GZmehm1NumScore))
+data_with_LE$ObservationID <- data_with_LE$X1
+df_LE <- data_with_LE %>% dplyr::select(c(ObservationID, Age_bin, Life_Expectancy ))
 
+#Join life_expectancy and age-bin to df_geda_num
+df_geda_num <- full_join(df_geda_num, df_LE, by= "ObservationID")
+```
+
+```{r}
+df_geda_num2 <- df_geda_num
+df_geda_num2 <- subset(df_geda_num2, select = -c(3, 5:15))
+
+
+```
+
+```{r}
+df_geda_num2 <- df_geda_num2 %>% select(-GZmehm1, everything())
+df_geda_num2 <- df_geda_num2 %>% select(-Age_bin, everything())
+df_geda_num3 <- df_geda_num2[1:259]
+head(df_geda_num3)
+```
+
+
+```{r}
+df_geda_correlation <- cor(df_geda_num3, method = "pearson")
+```
+
+```{r}
+View(df_geda_correlation)
 ```
 
 
@@ -50,25 +86,70 @@ df_LE_noNA <- tidyr::drop_na(df_LE)
 
 
 ```{r}
-score_life <- lm(Life_Expectancy~GZmehm1NumScore , df_LE_noNA)
+score_life <- lm(Life_Expectancy ~ GZmehm1NumScore, df_LE_noNA)
 ```
-
-```{r}
-plot(df_LE_noNA$Life_Expectancy, df_LE_noNA$GZmehm1NumScore)
-```
-
 
 ```{r}
 summary(score_life)
 ```
 
+```{r}
+df_LE2 <- data_with_LE %>% dplyr::select(c(Age_bin, Life_Expectancy, GZmehm1NumScore))
+df_geda_en2 <- dplyr::bind_cols(df_geda_en, df_LE2)
+```
 
 ```{r}
-describe(df_LE_noNA$GZmehm1NumScore)
+df_Disability <- df_geda_en2 %>% dplyr::select(c(BBbehB, Age_bin, Life_Expectancy, GZmehm1NumScore))
+```
+
+```{r}
+df_WithDisability <- subset(df_Disability, BBbehB == "Yes")
+df_WithoutDisability <- subset(df_Disability, BBbehB == "No")
+```
+
+```{r}
+df_WithDisabilityNoNA <- tidyr::drop_na(df_WithDisability)
 ```
 
 
+```{r}
+score_life_WithDisability <- lm(GZmehm1NumScore ~ Life_Expectancy , df_WithDisability)
+score_life_WithoutDisability <- lm(GZmehm1NumScore ~ Life_Expectancy , df_WithoutDisability)
 
+```
 
+```{r}
+summary(score_life_WithDisability)
+```
 
+```{r}
+summary(score_life_WithoutDisability)
+```
+
+```{r}
+#IAdoctor1B
+df_DoctorVisit <- df_geda_en2 %>% dplyr::select(c(IAarzt1B, Age_bin, Life_Expectancy, GZmehm1NumScore))
+df_DoctorVisitLessThan12 <- subset(df_DoctorVisit, IAarzt1B == "Less than 12 months")
+df_DoctorVisitMoreThan12 <- subset(df_DoctorVisit, IAarzt1B == "12 months or more ago")
+df_DoctorVisitNever <- subset(df_DoctorVisit, IAarzt1B == "Never")
+
+```
+
+```{r}
+score_life_DoctorMoreThan12 <- lm(GZmehm1NumScore ~ Life_Expectancy , df_DoctorVisitLessThan12)
+score_life_DoctorLessThan12 <- lm(GZmehm1NumScore ~ Life_Expectancy , df_DoctorVisitMoreThan12)
+score_life_DoctorNever <- lm(GZmehm1NumScore ~ Life_Expectancy , df_DoctorVisitNever)
+```
+
+```{r}
+summary(score_life_DoctorMoreThan12)
+```
+
+```{r}
+summary(score_life_DoctorLessThan12)
+```
+
+```{r}
+summary(score_life_DoctorNever)
+```
 

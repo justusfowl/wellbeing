@@ -46,7 +46,7 @@ The response variable GZmehm1 is a rating of individual wellbeing on a 5-step sc
 
 ```{r, echo=F}
 load(file = "data/geda_data.RData")
-hist(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1), breaks=5, main="Histogram of the wellbeing score (response)", xlab="1=very bad | 5=very good")
+hist(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1), breaks=.5:5.5, main="Histogram of the wellbeing score (response)", xlab="1=very bad | 5=very good")
 ```
 
 
@@ -737,5 +737,189 @@ options(scipen=3)
 predictedClass <- predict(m, testData) 
 confusionMatrix(predictedClass, testData$GZmehm1)
 ```
+
+```{r, Exec. Summary: Results Table, echo = F}
+library(data.table)
+
+
+df_model_sum_test <- df_model_sum
+df_model_sum_test$sig_col[df_model_sum_test$sig_col == ""] <- "not.sig."
+
+sig_table <- table(df_model_sum_test$VarLabelEn, df_model_sum_test$sig_col)
+sig_table <- cbind(sig_table, Total = rowSums(sig_table))
+sig_table <- as.data.frame.matrix(sig_table)
+#convert the row name to a column of the df
+#add column name
+sig_table <- setDT(sig_table, keep.rownames = TRUE)[]
+colnames(sig_table)[1] <- "VarLabelEn"
+
+#create a variable that measures the importance
+sig_table$importance <- (sig_table[,7]-sig_table[,6])/sig_table[,7]
+
+
+## thoughts: create the actionable list of variables as a list in R therefore it is easy to reference and adjust
+actionable <- data.frame(VarLabelEn = c(
+'state',
+'Type of employment',
+'Alcohol i.d.l. 12 months in 6 Cat.',
+'Smoke',
+'Stop. aerobic WHO Bew.empf. (With Go> = 150 min. Aerobic körp. Aktiv./Wo)',
+'> = 150 min Ausdaueraktiv.und 2x / week Active. for Muskelkräft. (stop. WHO both Sens.)',
+'Stop. aerobic WHO Bew.empf. (O. Go> = 150 aerobic körp. Aktiv./Wo min.)',
+'WHO Rec. to Muskelkräft. (> = 2x / wk. Activities. To strengthen the muscles)',
+'Frequency flu vaccine generated','Dental examination',
+'Visit psychologists i.d.l. 12 Mon.',
+'Visit physiotherapists i.d.l. 12 Mon',
+'Use of home care services: I.d.l. 12 Mon.',
+'Social support (Oslo 3 Social Support Scale)'))
+
+actionable$Actionable <- "Y"
+
+#Join the "Actionable" flag (refer to above df)
+sig_table <- left_join(sig_table,actionable)
+
+#Join the Themes associated with the Variable Names
+sig_table <- left_join(sig_table,unique(dplyr::select(df_model_sum,VarLabelEn,ThemeEn)))
+
+#subset the list of variables to actionable ones
+subset_actionable <- subset(sig_table, Actionable == "Y")
+#create a table that orders based on importance & actionable
+table_subset_actionable <- subset_actionable[order(-subset_actionable$importance),]
+
+#create a table that orders just based on importance
+subset_importance <- subset(sig_table,importance > 0)
+table_subset_importance <-subset_importance[order(-subset_importance$importance),]
+
+
+#Printing of the relevant tables
+table_subset_actionable %>% kable() %>% kable_styling()
+
+table_subset_importance %>% kable() %>% kable_styling()
+
+```
+
+```{r Appendix: Subset of table by Theme, echo = FALSE}
+
+#for the appendix of the presentation. Include a table by Theme.
+#unique_themes <- unique(sig_table$ThemeEn)
+
+#for (i in unique_themes){
+  
+  #theme_subset <- subset(sig_table, ThemeEn == i)
+  #table <- theme_subset[order(-theme_subset$importance),]
+  #kable(table) %>% kable_styling()
+  
+#}
+
+#Diseases
+theme_diseases <- subset(sig_table, ThemeEn == "Diseases (1101)")
+theme_diseases[order(-theme_diseases$importance),] %>% kable() %>% kable_styling()
+
+#Age and Gender
+theme_age_gender <- subset(sig_table, ThemeEn == "Age and gender (1701)")
+theme_age_gender[order(-theme_age_gender$importance),] %>% kable() %>% kable_styling()
+
+#physical activity
+theme_phy_act <- subset(sig_table, ThemeEn == "Physical Activity (1501)")
+theme_phy_act[order(-theme_phy_act$importance),] %>% kable() %>% kable_styling()
+
+#Alcohol
+theme_alcohol <- subset(sig_table, ThemeEn == "Alcohol (1504)")
+theme_alcohol[order(-theme_alcohol$importance),] %>% kable() %>% kable_styling()
+
+#Sociodemographic
+theme_sociodem <- subset(sig_table, ThemeEn == "Sociodemography (1704)")
+theme_sociodem[order(-theme_sociodem$importance),] %>% kable() %>% kable_styling()
+
+#Health
+theme_health <- subset(sig_table, ThemeEn == "Health (1102)")
+theme_health[order(-theme_health$importance),] %>% kable() %>% kable_styling()
+
+#Disability
+theme_disability <- subset(sig_table, ThemeEn == "Func. Beeinträcht, and complaints. Disability (1105)")
+theme_disability[order(-theme_disability$importance),] %>% kable() %>% kable_styling()
+
+#Migration Status
+theme_migration <- subset(sig_table, ThemeEn == "Migration Status (1705)")
+theme_migration[order(-theme_migration$importance),] %>% kable() %>% kable_styling()
+
+#Use
+theme_use <- subset(sig_table, ThemeEn == "Use (1401)")
+theme_use[order(-theme_use$importance),] %>% kable() %>% kable_styling()
+
+#Mental
+theme_mental <- subset(sig_table, ThemeEn == "Mental Krankh./Auffälligkeiten (1301)")
+theme_mental[order(-theme_mental$importance),] %>% kable() %>% kable_styling()
+
+#QoL
+theme_qol <- subset(sig_table, ThemeEn == "Quality of Life (1109)")
+theme_qol[order(-theme_qol$importance),] %>% kable() %>% kable_styling()
+
+#Vaccine
+theme_vacc <- subset(sig_table, ThemeEn == "Vaccinations (1402)")
+theme_vacc[order(-theme_vacc$importance),] %>% kable() %>% kable_styling()
+
+#protection factors
+theme_protection <- subset(sig_table, ThemeEn == "Protection factors (1303)")
+theme_protection[order(-theme_protection$importance),] %>% kable() %>% kable_styling()
+
+#See and Hear
+theme_see_hear <- subset(sig_table, ThemeEn == "Seeing and hearing (1104)")
+theme_see_hear[order(-theme_see_hear$importance),] %>% kable() %>% kable_styling()
+
+#personal data
+theme_personaldata <- subset(sig_table, ThemeEn == "Personal data (1702)")
+theme_personaldata[order(-theme_personaldata$importance),] %>% kable() %>% kable_styling()
+
+#smoking
+theme_smoking <- subset(sig_table, ThemeEn == "Smoking (1505)")
+theme_smoking[order(-theme_smoking$importance),] %>% kable() %>% kable_styling()
+
+#strain
+theme_strain <- subset(sig_table, ThemeEn == "Strain (1801)")
+theme_strain[order(-theme_strain$importance),] %>% kable() %>% kable_styling()
+
+#Medicines
+theme_medicines <- subset(sig_table, ThemeEn == "Medicines (1403)")
+theme_medicines[order(-theme_medicines$importance),] %>% kable() %>% kable_styling()
+
+```
+
+```{r, eval=FALSE, echo=FALSE}
+
+# Evaluatinon of different methods:
+
+
+## Multinomial model 
+#source: https://data.library.virginia.edu/fitting-and-interpreting-a-proportional-odds-model/
+
+# @TODO: Compare different models types 
+
+#trainingRows <- sample(1:nrow(df_tmp), 0.8 * nrow(df_tmp))
+#trainingData <- df_tmp[trainingRows, ]
+#testData <- df_tmp[-trainingRows, ]
+
+
+
+mlm <- nnet(GZmehm1 ~ ., data = trainingData,family="multinomial",size = 5574900,MaxNWts =10000000)
+
+
+
+# mlm <- multinom(GZmehm1 ~ ., data = trainingData)
+
+M1 <- logLik(m)
+M2 <- logLik(mlm)
+(G <- -2*(M1[1] - M2[1]))
+
+
+# run chi-squared test
+# hint: https://rpubs.com/mpfoley73/460935 
+
+# @Interpret Chi-squared P-value -> high = the fit of both models is different from one another.
+
+
+pchisq(G,3,lower.tail = FALSE)
+```
+
 
 
