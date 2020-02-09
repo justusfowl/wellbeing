@@ -32,7 +32,9 @@ data_with_LE <- read_csv("data/translated_data2.csv")
 ```{r}
 head(data_with_LE)
 ```
-
+```{r}
+head(df_geda_num)
+```
 
 ```{r}
 #select only Life_Expectancy, Age_bin and GZmehm1NumScore from dataframe with life expectancy
@@ -48,14 +50,22 @@ df_LE_noNA <- tidyr::drop_na(df_LE)
 
 
 ```{r}
-score_life <- lm(GZmehm1NumScore ~ Life_Expectancy , df_LE_noNA)
+score_life <- lm(Life_Expectancy~GZmehm1NumScore , df_LE_noNA)
 ```
+
+```{r}
+plot(df_LE_noNA$Life_Expectancy, df_LE_noNA$GZmehm1NumScore)
+```
+
 
 ```{r}
 summary(score_life)
 ```
 
 
+```{r}
+describe(df_LE_noNA$GZmehm1NumScore)
+```
 
 
 

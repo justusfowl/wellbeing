@@ -13,23 +13,29 @@ knitr::opts_chunk$set(echo = TRUE)
 set.seed(42)
 
 library(foreign)
-library(readstata13)
+# library(readstata13)
 library(dplyr)
 library(naniar)
 library(glmnet)
-require(ggplot2)
-require(MASS)
-require(Hmisc)
-require(reshape2)
+library(ggplot2)
+library(MASS)
+library(Hmisc)
+library(reshape2)
 library(cluster)
 library(VIM)
 library(readxl)
 library(gdata)
 library(caret)
 library(nnet)
-
+library(dummies)
+library(car)
 library(knitr)
 library(kableExtra)
+library(stargazer)
+
+# library(performanceEstimation)
+
+
 ```
 
 # Objective
@@ -565,27 +571,90 @@ Preparing the data for modelling:
 * removing NAs
 * creating training/test spit for performance evaluation
 
+
 ```{r}
 df_tmp <- df_overall %>% dplyr::select(curr_cols_all) 
-
 df_tmp <- df_tmp[complete.cases(df_tmp),]
-
 for (c in colnames(df_tmp)){
   df_tmp[[c]] <- drop.levels(df_tmp[[c]])
 }
+df_tmp <- df_tmp[complete.cases(df_tmp),]
+```
 
-trainingRows <- sample(1:nrow(df_tmp), 0.8 * nrow(df_tmp))
+## Testing for multicollinearity
 
+It seems that the following variables suggest multicollinearity and thus are omitted:
+
+```{r, echo=False}
+options(scipen=999)
+lm <- lm(GZmehm1 ~ ., data = (df_tmp %>% dplyr::mutate_all(as.character) %>% dplyr::mutate_all(as.numeric)))
+variance_factors <- vif(lm)
+variance_factors[variance_factors>9]
+```
+
+```{r}
+
+df_base <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
+
+trainingRows <- sample(1:nrow(df_base), 0.8 * nrow(df_base))
 trainingData <- df_tmp[trainingRows, ]
 testData <- df_tmp[-trainingRows, ]
+
+
+
 ```
+
+
+```{r, echo=F, eval=F}
+df_base_char <- df_base
+for (i in colnames(df_base_char)){
+  
+  col_meta <- df_meta_lvls[df_meta_lvls$Varname == i,]
+  
+  col_type <- col_meta[1,]$Type
+  
+  if (i != "GZmehm1"){
+     if(nrow(col_meta) > 0){
+      # print(paste(i, col_type))
+      
+      
+      if (col_type == "Scale" | col_type == "Ordinal"){
+        # print(i)
+        df_base_char[[i]] <- as.numeric(as.character(df_base_char[[i]]))
+      }else{
+        df_base_char[[i]] <- paste0("_", as.character(df_base_char[[i]]))
+      }
+  
+    }else{
+      df_base_char[[i]] <- as.numeric((df_base_char[[i]]))
+    }
+  }
+  
+}
+```
+```{r, echo=F, eval=F}
+write.csv(df_base, "df_base_numeric.csv", row.names=FALSE)
+write.csv(df_base_char, "df_base_char.csv", row.names=FALSE)
+
+```
+
+## Model selection
+
+[Please refer to python flow for model selection.]
+
 
 ## Ordered logistic regression
 
 Model fitting:
 ```{r, echo=F}
 m <- polr(GZmehm1 ~ ., data = trainingData, Hess=TRUE)
+summary(m)
 ```
+
+```{r}
+# stargazer(m, type="html", covariate.labels=c(""), out="models.htm")
+```
+
 
 Evaluating the model and interpreting the coefficients. 
 For this:
@@ -664,44 +733,9 @@ The model performance indicates an overall accuracy of ~68% with reasonable perf
 However, the balanced accuracy overall seems to indicate a reasonable model for estimating the wellbeing score of individuals.
 
 ```{r testdata ordered logit, echo=F}
+options(scipen=3)
 predictedClass <- predict(m, testData) 
 confusionMatrix(predictedClass, testData$GZmehm1)
 ```
-
-
-
-
-```{r, eval=FALSE, echo=FALSE}
-
-# Evaluatinon of different methods:
-
-# @TODO: Compare different models types 
-
-## Multinomial model 
-# source: https://data.library.virginia.edu/fitting-and-interpreting-a-proportional-odds-model/
-  
-
-#trainingRows <- sample(1:nrow(df_tmp), 0.8 * nrow(df_tmp))
-#trainingData <- df_tmp[trainingRows, ]
-# testData <- df_tmp[-trainingRows, ]
-
-
-# mlm <- multinom(GZmehm1 ~ ., data = trainingData)
-# 
-mlm <- nnet(GZmehm1 ~ ., data = trainingData,family="multinomial",size = 557490000,MaxNWts =100000000)
-# m_sample <- polr(GZmehm1 ~ sex+age5B+bula+PAgroe+KHhyp, data = trainingData, Hess=TRUE)
-
-M1 <- logLik(m)
-M2 <- logLik(mlm)
-(G <- -2*(M1[1] - M2[1]))
-
-
-# run chi-squared test
-# hint: https://rpubs.com/mpfoley73/460935 
-# @Interpret Chi-squared P-value -> high = the fit of both models is different from one another.
-
-pchisq(G,3,lower.tail = FALSE)
-```
-
 
 

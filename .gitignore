@@ -3,6 +3,10 @@ analysis/data.doc
 analysis/.Rhistory
 analysis/*.log
 analysis/*.pdf
+analysis/*.csv
+analysis/*_files/
+analysis/_archiv/
+analysis/local/
 
 *.RData
 .Rproj.user
