@@ -592,6 +592,72 @@ variance_factors <- vif(lm)
 variance_factors[variance_factors>9]
 ```
 
+Additional checks on multicollinearity validate the removal of the variables selected in the prior step
+```{r}
+#Test Multicollinearity after the removal of all of the variables with high VIF: KHhyp12pB & KHbbmyo12
+#Results: None
+df_test1 <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
+lm_test1 <- lm(GZmehm1 ~ ., data = (df_test1 %>% dplyr::mutate_all(as.character) %>% dplyr::mutate_all(as.numeric)))
+variance_factors_test1 <- vif(lm_test1)
+variance_factors_test1[variance_factors_test1>9]
+
+
+#Test Multicollinearity after the removal of one of the variables with high VIF: KHhyp12pB
+#Results: As expected, KHbbmyo12 came up with high multicol.
+df_test2 <- df_tmp %>% dplyr::select(-c(KHhyp12pB))
+lm_test2 <- lm(GZmehm1 ~ ., data = (df_test2 %>% dplyr::mutate_all(as.character) %>% dplyr::mutate_all(as.numeric)))
+variance_factors_test2 <- vif(lm_test2)
+variance_factors_test2[variance_factors_test2>9]
+
+
+#Test Multicollinearity after the removal of one of the variables with high VIF: KHhyp12pB
+#Results: As expected, KHhyp12pB came up with high multicol.
+df_test3 <- df_tmp %>% dplyr::select(-c(KHbbmyo12))
+lm_test3 <- lm(GZmehm1 ~ ., data = (df_test3 %>% dplyr::mutate_all(as.character) %>% dplyr::mutate_all(as.numeric)))
+variance_factors_test3 <- vif(lm_test3)
+variance_factors_test3[variance_factors_test3>9]
+```
+
+
+Our goal here is to run separate binary logistic regressions for different levels of the target variable (4 regressions if you have 5 levels), and see that the slopes are similar in all 4. The intercepts can be very different, that is consistent with the proportional odds model.
+```{r}
+#Check Parellel Slopes Assumption Holds
+#psa = parallel slopes assumption
+
+#health = 1
+df_psa1 <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
+df_psa1$GZmehm1 <- as.numeric(df_psa1$GZmehm1)
+df_psa1$GZmehm1[df_psa1$GZmehm1 > 1] <- 0
+logit_1 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa1)
+
+#health <= 2
+df_psa2 <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
+df_psa2$GZmehm1 <- as.numeric(df_psa2$GZmehm1)
+df_psa2$GZmehm1[df_psa2$GZmehm1 <= 2] <- 1
+df_psa2$GZmehm1[df_psa2$GZmehm1 > 2] <- 0
+logit_2 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa2)
+
+#health <= 3
+df_psa3 <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
+df_psa3$GZmehm1 <- as.numeric(df_psa3$GZmehm1)
+df_psa3$GZmehm1[df_psa3$GZmehm1 <= 3] <- 1
+df_psa3$GZmehm1[df_psa3$GZmehm1 > 3] <- 0
+logit_3 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa3)
+
+#health <= 4
+df_psa4 <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
+df_psa4$GZmehm1 <- as.numeric(df_psa2$GZmehm1)
+df_psa4$GZmehm1[df_psa4$GZmehm1 <= 4] <- 1
+df_psa4$GZmehm1[df_psa4$GZmehm1 > 4] <- 0
+logit_4 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa4)
+
+#Summary Statistics
+summary(logit_1)
+summary(logit_2)
+summary(logit_3)
+summary(logit_4)
+```
+
 ```{r}
 
 df_base <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
@@ -599,9 +665,6 @@ df_base <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
 trainingRows <- sample(1:nrow(df_base), 0.8 * nrow(df_base))
 trainingData <- df_tmp[trainingRows, ]
 testData <- df_tmp[-trainingRows, ]
-
-
-
 ```
 
 
@@ -650,6 +713,42 @@ Model fitting:
 m <- polr(GZmehm1 ~ ., data = trainingData, Hess=TRUE)
 summary(m)
 ```
+
+TBC!
+
+The goal here would be to create a table that demonstrates the similarities and/or diff in the statistically significant variables we found while subsetting the data
+
+Questions: Should we subset on smoking?
+
+Subsetting: Sex = 1
+```{r, echo=F}
+trainingData_sex1 <- subset(trainingData,trainingData$sex == 1)
+m_sex1 <- polr(GZmehm1 ~ ., data = trainingData_sex1, Hess=TRUE)
+summary(m_sex1)
+
+df_model_sum <- as.data.frame(coef(summary(m_sex1)))
+
+## calculate and store p values
+df_model_sum$p <- pnorm(abs(df_model_sum$`t value`), lower.tail = FALSE) * 2
+
+df_model_sum$sig_col <- ifelse(df_model_sum$p < 0.001,'***',ifelse(df_model_sum$p < 0.01,'**',
+                     ifelse(df_model_sum$p < 0.05,'*',
+                            ifelse(df_model_sum$p < 0.1,'.', ''
+                     ))))
+
+
+df_model_sum$logodds <- format(exp(df_model_sum$Value), trim = TRUE, digits = 3, scientific = F)
+
+df_meta_lvls$coeff_label <- paste0(df_meta_lvls$Varname,df_meta_lvls$numLevel)
+df_model_sum <- setDT(df_model_sum, keep.rownames = TRUE)[]
+df_model_sum <- df_model_sum %>% dplyr::rename(coeff_label = rn)
+df_model_sum <- df_model_sum %>% left_join((df_meta_lvls %>% dplyr::select(c(coeff_label, ThemeEn, Varname, VarLabelEn, textLabelEn))), by="coeff_label")
+
+df_model_sum %>% 
+  kable() %>%
+  kable_styling()
+```
+
 
 ```{r}
 # stargazer(m, type="html", covariate.labels=c(""), out="models.htm")
