@@ -19,7 +19,7 @@ library(reshape2)
 library(Hmisc)
 library(ggplot2)
 library(stringi)
-require(ggiraph)
+library(ggiraph)
 library(ggiraphExtra)
 ```
 
@@ -203,7 +203,17 @@ score_life_Exp2 <- lm(LifeExp ~ LQzufrB10 + GZmehm1 , df_geda_LifeExp)
 summary(score_life_Exp2)
 ```
 
+```{r}
+score_life_Exp3 <- glm(LifeExp ~ LQzufrB10 * GZmehm1 , df_geda_LifeExp)
+summary(score_life_Exp3)
+```
 
+```{r}
+ggplot(score_life_Exp3,aes(y=LifeExp,x=LQzufrB10,color=GZmehm1))+
+  geom_point()+
+  stat_smooth(method="lm",se=FALSE)
+#ggPredict(score_life_Exp3)
+```
 
 
 
