@@ -32,6 +32,8 @@ library(car)
 library(knitr)
 library(kableExtra)
 library(stargazer)
+library(MatchIt)
+
 
 # library(performanceEstimation)
 
@@ -268,7 +270,6 @@ UVarztE_k #Medical care after an accident three Cat.
 
 #### Initially we want to set a baseline analysis of overall drivers for wellbeing crossing the entire population in Germany
 
-
 Ensure that the correct encoding (factor, numeric, ...) is applied according to the meta data from base dataset before for further feature enginering
 
 ```{r right-coding of data types, echo=F}
@@ -385,13 +386,37 @@ Set NA to values where people are not being asked about tetanus vaccinations
 df_overall[(df_overall$IPtet_lz == '-96' | df_overall$IPtet_lz == '-95' ) & !is.na(df_overall$IPtet_lz),]$IPtet_lz <- NA
 ```
 
-Encode number of GP visited in the last 12 months --> if -96, then 0 
+Encode number of GP visited in the last 4 weeks --> if -96, then 0 
 
 ```{r}
 df_overall[df_overall$IAarzt1B4w == '-96' & !is.na(df_overall$IAarzt1B4w),]$IAarzt1B4w <- 0
 
 df_overall$IAarzt1B4w <- as.numeric(df_overall$IAarzt1B4w)
 ```
+
+Encode number of GP visited in the last 12 months --> if -96, then 0 (added on 4/1 by AA)
+
+```{r}
+df_overall$IAarzt1B <- as.numeric(df_overall$IAarzt1B)
+
+#subtract 1 given it updates the values in the original data set (Added 4.1.20)
+df_overall$IAarzt1B <- df_overall$IAarzt1B -1
+
+# if 1 = 1, all else = 0 (represent if you have visited doctor in the last 12 months) (added 4.1.20)
+df_overall$IAarzt1B[df_overall$IAarzt1B == 1] <- 0
+df_overall$IAarzt1B[df_overall$IAarzt1B >= 2] <- 1
+
+```
+
+
+Set NA to values where people left values blank for SDbild4C (Highest berufl. Training or university / college degree) and SDbverh2 (Type of employment)
+
+```{r}
+#df_overall$SDbild4C[df_overall$SDbild4C >= "-96"] <- NA #ADDED 4.1.20
+#df_overall$SDbverh2[df_overall$SDbverh2 >= "-96"] <- NA #ADDED 4.1.20
+```
+
+
 
 Encode number of specialist visited in the last 12 months --> if -96, then 0 
 
@@ -502,6 +527,7 @@ curr_cols <- c(
   # IAkosten4, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: US/Behandlung psy. Prob.
   "IAarzt14B", #Zahnmedizinische Untersuchung
   "IAarzt1B4w", #Besuch Allgemeinarzt oder Hausarzt i.d.l. 4 Wochen: Anzahl
+  "IAarzt1B", #Visit doctor in the last 12 months (Added on April 1st, part of causal analysis)
   "IAfa4w", #Besuch Facharzt i.d.l. 4 Wochen: Anzahl
   "IAarzt8C", #Besuch Psychologen i.d.l. 12 Mon.
   "IAkhs", #Stationär im Krankenhaus i.d.l. 12 Mon.
@@ -652,10 +678,10 @@ df_psa4$GZmehm1[df_psa4$GZmehm1 > 4] <- 0
 logit_4 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa4)
 
 #Summary Statistics
-summary(logit_1)
-summary(logit_2)
-summary(logit_3)
-summary(logit_4)
+#summary(logit_1)
+#summary(logit_2)
+#summary(logit_3)
+#summary(logit_4)
 ```
 
 ```{r}
@@ -666,7 +692,6 @@ trainingRows <- sample(1:nrow(df_base), 0.8 * nrow(df_base))
 trainingData <- df_tmp[trainingRows, ]
 testData <- df_tmp[-trainingRows, ]
 ```
-
 
 ```{r, echo=F, eval=F}
 df_base_char <- df_base
@@ -695,16 +720,104 @@ for (i in colnames(df_base_char)){
   
 }
 ```
+
 ```{r, echo=F, eval=F}
 write.csv(df_base, "df_base_numeric.csv", row.names=FALSE)
 write.csv(df_base_char, "df_base_char.csv", row.names=FALSE)
+```
 
+Causal Analysis: Propensity Score Matching
+```{r}
+#psm = propensity score matching
+psm_model <- glm(IAarzt1B ~ .,family = binomial (link = "probit"), data = df_base)
+
+#Using this model, we can now calculate the propensity score for each person. It is simply the student’s predicted probability of being Treated, given the estimates from the logit model. Below, I calculate this propensity score using predict() and create a dataframe that has the propensity score as well as the student’s actual treatment status.
+psm_df <- data.frame(predict_score = predict(psm_model, type = "response"),
+                     treated = psm_model$model$IAarzt1B)
+
+```
+
+Examining the region of common support
+```{r}
+labs <- paste("Visit general practitioner in LTM:", c("NO", "YES"))
+psm_df %>%
+  mutate(treated = ifelse(treated == 1, labs[1], labs[2])) %>%
+  ggplot(aes(x = predict_score)) +
+  geom_histogram(color = "white") +
+  facet_wrap(~treated) +
+  xlab("Propensity Score (Prob. of NOT having visited GP in LTM)") +
+  theme_bw()
+```
+
+Executing a matching algorithm
+
+Find pairs of observations that have very similar propensity scores, but that differ in their treatment status. matchit package estimates the propensity score then matches observations based on the method of choice (“nearest” in this case).
+
+```{r}
+
+dim(df_base)
+
+set.seed(100)
+mod_match <- matchit(IAarzt1B ~ 
+                            
+                            sex + age5B + MIbirthplace + MIcitizen + bula + PAgroe + PAgewiB + IAkv1D + SDaeqeink_k + SDbild4C + SDbverh2 + SDhvtypD + SDmainstat + SDalo + PAhhtype + ENobstBz1 + ENgemBz1 + AKoft12_k + RCstat + KAehispaq2 + KAehispaq4 + KAspodauC_k + KAehispaq8 + KAgfka + KAgfa + KAgfka1 + KAgfmk + IPinfl4 + IPinfl6B + IPtet_lz + AMarztB + AMfrei + AUarbzD_k + IAhypus + IAcholus + IAdiabus + IAkfutyp2B_lz + IAkfutyp4B_lz + IAtermin + IAweg + IAarzt14B + IAarzt1B4w + IAfa4w + IAarzt8C + IAkhs + IAkhs_k + IAther2B + IApflege + GZmehm3C + GZmehm2D + BBbehB + GZsubj1 + SHseh1 + SHhoer1 + LQsf367C + LQsf368C + flagHadAccident + BBdors112 + BBdors212 + BBblas12B + BBgehen + BBtreppe + BBmyo12 + BBsa12 + KHhyp12 + KHhyp + KHhypmedC + KHmyo12 + KHkhk12 + KHhi12 + KHsa12 + KHdiabB12 + KHab12 + KHkarz12 + KHlip12A + KHlipA + KHlipmedA + KHcb12 + KHulc12 + KHced12 + KHlz12 + KHcle12 + KHniB12 + KHdge12 + KHra12 + KHos12 + KHalgi112 + LQzufrB10 + PKdep12 + SFoslo1C + SFoslo3A + SFosloA + GZmehm1
+                            , data = df_base, method = "nearest", replace = FALSE, caliper = 0.2)
+
+```
+
+To create a dataframe containing only the matched observations
+```{r}
+dta_m <- match.data(mod_match)
+dim(dta_m)
+
+```
+
+Examining covariate balance in the matched sample
+We’ll check difference in means for a handful of variables to assess covariate balance in the matched sample:
+
+Difference in Means
+```{r}
+dta_m_numeric <- dta_m #making a new df in order to conver variables to numeric
+
+#Picked 5 variables, including wellbeing to confirm the means were close to each other
+dta_m_numeric$sex <- as.numeric(dta_m_numeric$sex)
+dta_m_numeric$GZmehm1 <- as.numeric(dta_m_numeric$GZmehm1)
+dta_m_numeric$RCstat <- as.numeric(dta_m_numeric$RCstat)
+dta_m_numeric$bula <- as.numeric(dta_m_numeric$bula)
+dta_m_numeric$PAhhtype <- as.numeric(dta_m_numeric$PAhhtype)
+
+
+mean_check_var <- c("sex","GZmehm1","RCstat","bula","PAhhtype")
+
+#Checking to see the means are close to each other
+dta_m_numeric %>%
+  group_by(IAarzt1B) %>% 
+  dplyr :: select(one_of(mean_check_var)) %>%
+  summarise_all(funs(mean)) %>%
+  kable() %>%
+  kable_styling()
+```
+
+Estimating treatment effects
+```{r}
+
+with(dta_m_numeric, t.test(GZmehm1 ~IAarzt1B ))
+
+psm_results <- polr(GZmehm1 ~ 
+                      IAarzt1B+ sex + age5B + MIbirthplace + MIcitizen + bula + PAgroe + PAgewiB + IAkv1D + SDaeqeink_k + SDbild4C + SDbverh2 + SDhvtypD + SDmainstat + SDalo+ PAhhtype + AKoft12_k + RCstat + KAehispaq2 + KAspodauC_k + KAehispaq8
+                      , data = dta_m)
+
+#Excluded: given the consistent errors received as a result of using the polr function in R and the marginal impact of IAarzt1B on GZmehm1, we excluded the below variables
+
+#GZmehm2D + LQsf367C + BBgehen + BBtreppe + KHhyp + KHhypmedC + KHkhk12 + KHhi12 + KHkarz12 + KHlip12A + KHulc12 + KHced12 + KHos12 + KHalgi112 + LQzufrB10 + PKdep12 + SFoslo1C + SFoslo3A               
+
+#+ KAgfka + KAgfa + KAgfka1 + KAgfmk + IPinfl4 + IPinfl6B + IPtet_lz + AMarztB + AMfrei + AUarbzD_k + IAhypus + IAcholus + IAdiabus + IAkfutyp2B_lz + IAkfutyp4B_lz + IAtermin + IAweg + IAarzt14B + IAarzt8C + IAkhs + IAther2B + IApflege + GZmehm3C + BBbehB+ GZsubj1+ SHseh1 + SHhoer1+ KHlipA + BBmyo12 +BBsa12+KHhyp12 + KHmyo12+KHsa12+ KHdiabB12+ KHab12+ KHlipmedA+ KHcb12+ KHlz12+ KHcle12 + KHniB12+ KHdge12+ KHra12         
+summary(psm_results)
 ```
 
 ## Model selection
 
 [Please refer to python flow for model selection.]
-
 
 ## Ordered logistic regression
 
@@ -713,8 +826,6 @@ Model fitting:
 m <- polr(GZmehm1 ~ ., data = trainingData, Hess=TRUE)
 summary(m)
 ```
-
-TBC!
 
 The goal here would be to create a table that demonstrates the similarities and/or diff in the statistically significant variables we found while subsetting the data
 
