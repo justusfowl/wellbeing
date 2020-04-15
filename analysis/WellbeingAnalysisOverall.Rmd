@@ -921,5 +921,14 @@ M2 <- logLik(mlm)
 pchisq(G,3,lower.tail = FALSE)
 ```
 
+## Create meta data for the chatbot
+
+```{r}
+Varname = colnames(df_base)
+df_relevant_cols <- as.data.frame(Varname)
+df_bot_cols <- df_relevant_cols %>% dplyr::left_join(df_meta_lvls) %>% dplyr::select(-SortOrder)
+write.csv(df_bot_cols, "df_bot_cols.csv", row.names=FALSE)
+df_bot_cols
+```
 
 
