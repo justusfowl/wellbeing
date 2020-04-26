@@ -12,3 +12,4 @@ analysis/local/
 .Rproj.user
 
 analysis/*.csv
+paper/data/
