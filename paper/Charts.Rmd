@@ -16,6 +16,7 @@ library(dplyr)
 library(naniar)
 library(glmnet)
 library(ggplot2)
+library(gridExtra)
 library(MASS)
 library(Hmisc)
 library(reshape2)
@@ -40,6 +41,16 @@ library(readr)
 ```{r, echo=F}
 load(file = "../analysis/data/geda_data.RData")
 hist(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1), breaks=.5:5.5, main="Histogram of the wellbeing score (response)", xlab="1=very bad | 5=very good")
+```
+
+```{r}
+
+df_chart <- read_excel("data/Number_variables_per_category.xlsx")
+
+ggplot(df_chart, aes(y=Value, x=Type)) + 
+  geom_bar(position="stack", stat="identity") + coord_flip() +
+  theme(axis.text.x = element_text(angle = 90))
+
 ```
 
 
@@ -95,3 +106,66 @@ kable(mean_PSM_table) %>%
 
 ```
 
+
+```{r}
+df_chart <- read_csv("data/distribution_marginal_effects.csv")
+
+p_worsen <-  ggplot(df_chart, aes(x=score_worsen)) + 
+  geom_histogram(color="black", fill="white") + labs(title="Impact towards being worse off")
+
+p_neutral <-  ggplot(df_chart, aes(x=score_ensuring)) + 
+  geom_histogram(color="black", fill="white") + labs(title="Impact towards staying in the same category")
+
+p_improve <- ggplot(df_chart, aes(x=score_improve)) + 
+  geom_histogram(color="black", fill="white") + labs(title="Impact towards improving")
+
+grid.arrange(grobs = list(p_worsen, p_neutral, p_improve), ncol=3,top="")
+```
+
+
+
+```{r}
+df_chart <- read_csv("data/Impact_of_incremental_improvement.csv")
+p <- ggplot(df_chart, aes(x=`_changed`, y=mean)) + 
+  geom_bar(stat="identity", color="black", 
+           position=position_dodge()) +
+  geom_errorbar(aes(ymin=mean-std, ymax=mean+std), width=.2,
+                 position=position_dodge(.9))  + coord_flip()
+p
+
+```
+
+```{r}
+df_chart <- read_csv("data/Impact_of_simulating_incremental_change_worsen.csv")
+p <- ggplot(df_chart, aes(x=`_changed`, y=mean)) + 
+  geom_bar(stat="identity", color="black", 
+           position=position_dodge()) +
+  geom_errorbar(aes(ymin=mean-std, ymax=mean+std), width=.2,
+                 position=position_dodge(.9))  + coord_flip()
+p
+
+```
+
+
+```{r}
+@TODO: box-plot from python
+
+df_chart_mae <- read_excel("data/model_performance_comparison.xlsx", sheet="MAE")
+
+p <- ggplot(df_chart_mae, aes(Model, hwy))
+p + geom_boxplot()
+
+summarydata<-list(stats=matrix(c(1,2,3,4,5),5,1), n=10)
+bxp(summarydata)
+
+```
+
+
+```{r}
+@TODO: confusion matrix from python
+
+df_chart_ord <- read_csv("data/df_cm_rf.csv")
+df_chart_rf <- read_csv("data/df_cm_ord.csv")
+
+
+```
