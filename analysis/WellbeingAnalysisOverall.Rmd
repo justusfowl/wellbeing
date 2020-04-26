@@ -833,6 +833,7 @@ stargazer(psm_results)
 ```{r}
 #csv file was read with mapping of IV
 iv <- read.csv("data/IV_variable.csv")
+#iv <- read.csv("data/IV_variable_BF_2.csv")
 
 #join the instrumental variables to the data
 df_iv <- merge(x = df_base, y = iv, all.x = TRUE, by.x = "bula", by.y = "bula")
@@ -850,6 +851,12 @@ df_iv$IPinfl6B_num[df_iv$IPinfl6B_num == 4] <- 5
 
 #multiplying the variables together
 df_iv$IV <- df_iv$st_km * df_iv$IPinfl6B_num
+
+#this variable is using only the density of streets / km2 variable as an IV. Only used to validate that state level IV would not be appropriate.
+#df_iv$IV <- df_iv$st_km 
+
+#BILL FLUNEY Variable
+#df_iv$IV <- df_iv$fatal_acc_per_million
 
 
 #Graph the histogram of IV variables by having or not gone to visit a general practicioner
