@@ -146,6 +146,17 @@ p
 
 ```
 
+```{r}
+#Life Expectancy Chart
+df_geda_LifeExp2 <- read_csv("data/Figure_12_LifeExpectancy_to_Well-Being_Score.csv")
+
+ggplot(df_geda_LifeExp2, aes(LifeExp, as.numeric(GZmehm1)*as.numeric(age5B)*as.numeric(sex)* as.numeric(bula)) ) +
+  geom_point() +
+  stat_smooth(method = "lm", formula = y ~ x)
+
+```
+
+
 
 ```{r}
 @TODO: box-plot from python
