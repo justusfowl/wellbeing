@@ -30,6 +30,10 @@ library(dummies)
 library(car)
 library(knitr)
 library(kableExtra)
+library(magick)
+library(webshot)
+# install packages according to: https://haozhu233.github.io/kableExtra/save_kable_and_as_image.html
+
 library(stargazer)
 library(scales)
 library(readr)
@@ -41,7 +45,12 @@ library(ggthemes)
 
 ```{r, echo=F}
 load(file = "data/geda_data.RData")
-hist(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1), breaks = .5:5.5, main = "Wellbeing score responses", xlab = "1=very bad | 5=very good", ylab = "Responses", ylim = c(0,15000), col = "lightblue")
+h_wellbeing <- hist(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1), breaks = .5:5.5, main = "Wellbeing score responses", xlab = "1=very bad | 5=very good", ylab = "Responses", ylim = c(0,15000), col = "lightblue")
+h_wellbeing
+
+summary(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1))
+sd(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1))
+
 ```
 
 ```{r}
@@ -196,14 +205,14 @@ kable(mean_PSM_table) %>%
 
 ```
 
-```{r}
+```{r, fig.width=10, fig.height=3}
 df_chart <- read_csv("data/distribution_marginal_effects.csv")
 
 p_worsen <-  ggplot(df_chart, aes(x=score_worsen)) + 
   geom_histogram(color="white", fill="lightblue") +
   ylim(0,100000) +
   xlim(-0.25,0.25) +
-  labs(title="Worse-off", x = " ", y = " ") +
+  labs(title="Previous worse class", x = " ", y = "Frequency") +
   theme_few() +
   theme(panel.border = element_blank(),
         panel.grid.major = element_blank(),
@@ -216,7 +225,7 @@ p_neutral <-  ggplot(df_chart, aes(x=score_ensuring)) +
   geom_histogram(color="white", fill="lightblue") +
   ylim(0,100000) +
   xlim(-0.25,0.25) +
-  labs(title="Same category", x = " ", y = " ") +
+  labs(title="Same wellbeing class", x = "Delta effect on respective classes", y = " ") +
   theme_few() +
   theme(panel.border = element_blank(),
         panel.grid.major = element_blank(),
@@ -229,7 +238,7 @@ p_improve <- ggplot(df_chart, aes(x=score_improve)) +
   geom_histogram(color="white", fill="lightblue") +
   ylim(0,100000) +
   xlim(-0.25,0.25) +
-  labs(title="Improving", x = " ", y = " ") +
+  labs(title="Next better class", x = " ", y = " ") +
   theme_few() +
   theme(panel.border = element_blank(),
         panel.grid.major = element_blank(),
@@ -269,7 +278,7 @@ p <- ggplot(df_chart, aes(x=reorder(`_changed`, -mean), y=mean)) +
                 width=.2,
                 position=position_dodge(.9)) +
   coord_flip() +
-  labs(title = "Impact of incremental improvement on wellbeing score", subtitle = "rn = rank of recommendation", x = "Variables", y = "Mean", caption = "GEDA (2014 - 2015)") +
+  labs(title = "Impact of incremental improvement on wellbeing score", subtitle = "rn = rank of recommendation", x = "Variables", y = "Mean of rn", caption = "GEDA (2014 - 2015)") +
   theme_few() +
   theme(panel.border = element_blank(),
         panel.grid.major = element_blank(),
@@ -305,7 +314,7 @@ p <- ggplot(df_chart, aes(x=reorder(`_changed`, mean), y=mean)) +
                 width=.2,
                 position=position_dodge(.9))  +
   coord_flip() +
-  labs(title = "Impact of simulating incremental change", subtitle = "worsen the rating for wellbeing", x = "Variables", y = "Score", caption = "GEDA (2014 - 2015)") +
+  labs(title = "Impact of simulating incremental change", subtitle = "Higher effect = increasing likelihood of worsening", x = "Variables", y = "Delta effect on the previous lower wellbeing class ", caption = "GEDA (2014 - 2015)") +
   theme_few() +
   theme(panel.border = element_blank(),
         panel.grid.major = element_blank(),
@@ -363,25 +372,12 @@ ggplot(df_geda_LifeExp2, aes(LifeExp, as.numeric(GZmehm1)*as.numeric(age5B)*as.n
 
 
 ```{r}
-@TODO: box-plot from python
-
-df_chart_mae <- read_excel("data/model_performance_comparison.xlsx", sheet="MAE")
-
-p <- ggplot(df_chart_mae, aes(Model, hwy))
-p + geom_boxplot()
-
-summarydata<-list(stats=matrix(c(1,2,3,4,5),5,1), n=10)
-bxp(summarydata)
-
+# box-plot from python --> refer to seaborn chart
 ```
 
 
 ```{r}
-@TODO: confusion matrix from python
-
-df_chart_ord <- read_csv("data/df_cm_rf.csv")
-df_chart_rf <- read_csv("data/df_cm_ord.csv")
-
+# heatmap-plot from python confusion matrix --> refer to seaborn chart
 
 ```
 
@@ -399,5 +395,170 @@ fig.5 <- fig5[,]
 fig.5 <- kable(fig.5, align = "c", booktabs = TRUE, caption = "Figure 5 - Example of important contributor to wellbeing, age category impact on wellbeing", escape = FALSE)
 fig.5
 ```
+
+
+```{r}
+load("data/df_patienten.RData")
+
+ffa_patient_age_distri <- ggplot(df_patienten, aes(AlterBeiAnlage)) + 
+   geom_histogram(alpha = 1, aes(y = ..density..), position = 'identity' , fill="lightblue") +
+    geom_vline(data=df_patienten, aes(xintercept=mean(df_patienten$AlterBeiAnlage)),
+             linetype="dashed") +
+   theme_few() +
+  labs(title = "Distribution of age of patients",
+       x = "Years of age", y = "Relative frequency",
+       caption = "FFA (2010 - 2020)") +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+
+
+```
+
+```{r}
+df_chronic_ffa <- read_csv("data/ffa_chronic_proportion.csv")
+
+ffa_chronics <- ggplot(df_chronic_ffa, aes(x=rep_date_date , y=perc_chronis )) +
+    geom_area(colour="lightgray", size=.2, alpha=1, fill="lightblue") +
+   theme_few() +
+  labs(title = "Proportions of treated patients with chronic diseases",
+       x = " ", y = "Percent",
+       caption = "FFA (2014 - 2020)") +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "lightgray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+
+```
+
+
+
+```{r, fig.width=15, fig.height=10}
+df_ffa_diag <- read_csv("data/ffa_distribution_diagnoses.csv")
+
+df_ffa_diag_chart <- df_ffa_diag %>% dplyr::select(c(ICDCode, AnzahlDiagnose)) %>% dplyr::group_by(ICDCode) %>% dplyr::summarize(AnzahlDiagnose = sum(AnzahlDiagnose)) %>% arrange(desc(AnzahlDiagnose)) %>% head(30)
+
+
+
+ffa_diags <- ggplot(df_ffa_diag_chart, aes(x=reorder(ICDCode, -AnzahlDiagnose), y=AnzahlDiagnose)) + 
+geom_bar(stat="identity", width=1, fill="lightblue") +
+geom_label(
+  label="Hypertonia", 
+  x=2,
+  y=18000,
+  label.padding = unit(0.55, "lines"), # Rectangle size around label
+  label.size = 0.55,
+  color = "white",
+  fill="#2c657d"
+) + 
+geom_label(
+  label="Virusinfection", 
+  x=4.5,
+  y=15000,
+  label.padding = unit(0.55, "lines"), # Rectangle size around label
+  label.size = 0.55,
+  color = "white",
+  fill="#2c657d"
+) + 
+geom_label(
+  label="Diabetes", 
+  x=8,
+  y=8500,
+  label.padding = unit(0.55, "lines"), # Rectangle size around label
+  label.size = 0.55,
+  color = "white",
+  fill="#2c657d"
+) + 
+geom_label(
+  label="Vaccination", 
+  x=13,
+  y=8500,
+  label.padding = unit(0.55, "lines"), # Rectangle size around label
+  label.size = 0.55,
+  color = "white",
+  fill="#2c657d"
+) + 
+geom_label(
+  label="Coronary heart diseases", 
+  x=15,
+  y=6800,
+  label.padding = unit(0.55, "lines"), # Rectangle size around label
+  label.size = 0.55,
+  color = "white",
+  fill="#2c657d"
+) +
+ theme_few() +
+labs(title = "Top 30 diagnoses",
+     x = "ICD diagnoses", y = "Frequency",
+     caption = "FFA (2000 - 2020)") +
+theme(panel.border = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.line = element_line(color = "gray"),
+      axis.ticks.x = element_blank(),
+      axis.text.x = element_text(angle = 90),
+      axis.ticks.y = element_blank())
+
+
+grid.arrange(
+  grobs = list(ffa_patient_age_distri, ffa_chronics, ffa_diags),
+  widths = c(1, 1),
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 3))
+)
+
+```
+
+
+```{r}
+
+df_geda_theme <- read_excel("data/geda_theme_list.xlsx")
+kable(df_geda_theme, align = "c", booktabs = TRUE, escape = FALSE, "latex") %>%
+  kable_styling(latex_options = c("striped", "scale_down")) %>% as_image()
+```
+
+```{r}
+
+var <- c("Doctor Visits (IAarzt1B)", "")
+ord <- c("0.104", "0.060")
+iv <- c("1.057 ***", "0.154")
+
+df_iv <- data.frame("var"=var, "ord" = ord, "iv" = iv)
+
+colnames(df_iv) = c('', 'Ordinal Logistic Regression', 'Instrumental Variable')
+
+
+ kable(df_iv, align = "c", booktabs = TRUE,  escape = FALSE, "latex") %>% 
+  add_header_above(c('', 'Dependend variable: GZmehm1'=2))  %>% as_image()
+
+```
+
+```{r}
+
+df_actionable <- read_csv("data/actionable.csv")
+kable(df_actionable, align = "l", booktabs = TRUE, escape = FALSE, "latex") %>%
+  kable_styling(latex_options = c("striped", "scale_down")) %>% as_image()
+```
+
+
+```{r}
+df_meta <- read_excel("../analysis/data.doc/GEDA14_Variablenuebersicht_Analyse_VarPrep.xlsx", sheet="levels")
+
+df_var_list <- df_meta %>% dplyr::select(c(Varname, ThemeEn, VarLabelEn)) %>% dplyr::rename('Variable' = Varname, "Theme"= ThemeEn, "Description" = VarLabelEn) %>% dplyr::group_by(Variable, Theme, Description) %>% dplyr::summarise()
+
+kable(df_var_list[1:65,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("65.png")
+kable(df_var_list[66:130,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("130.png")
+kable(df_var_list[131:195,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("195.png")
+kable(df_var_list[196:260,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("260.png")
+kable(df_var_list[261:269,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("269.png")
+```
+
 
 
