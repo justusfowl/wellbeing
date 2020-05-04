@@ -21,7 +21,7 @@ library(MASS)
 library(Hmisc)
 library(reshape2)
 library(cluster)
-library(VIM)
+# library(VIM)
 library(readxl)
 library(gdata)
 library(caret)
@@ -33,15 +33,37 @@ library(kableExtra)
 library(stargazer)
 library(scales)
 library(readr)
+library(ggthemes)
 
 ```
 
 ## Charts for the published paper
 
 ```{r, echo=F}
-load(file = "../analysis/data/geda_data.RData")
-hist(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1), breaks=.5:5.5, main="Histogram of the wellbeing score (response)", xlab="1=very bad | 5=very good")
+load(file = "data/geda_data.RData")
+hist(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1), breaks = .5:5.5, main = "Wellbeing score responses", xlab = "1=very bad | 5=very good", ylab = "Responses", ylim = c(0,15000), col = "lightblue")
 ```
+
+```{r}
+df_chart <- read_excel("data/Number_variables_per_category.xlsx")
+
+ggplot(df_chart, aes(x=reorder(Type, -Value), y=Value)) + 
+  geom_bar(position="stack", stat="identity", fill = "lightblue") +
+  coord_flip() +
+  theme_few() +
+  labs(title = "Number of variables per category",
+       x = " ", y = " ",
+       caption = "GEDA (2014 - 2015)") +
+  theme(panel.border = element_blank(), panel.grid.major = 
+          element_blank(), panel.grid.minor = 
+          element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+```
+
+
 
 ```{r}
 
@@ -52,6 +74,30 @@ ggplot(df_chart, aes(y=Value, x=Type)) +
   theme(axis.text.x = element_text(angle = 90))
 
 ```
+
+```{r}
+#subTitle <- "" # "(1973-74)" 
+#title <- "Distribution of wellbeing scores within cleaned dataset"
+#caption<- "" # "(1973-74)" 
+#subTitle <- "" # "(1973-74)" 
+#xLab <- "Wellbeing-Score (GZMehm1)"
+#yLab <- "Count (#)"
+
+ggplot(df_geda_num, aes(x=as.numeric(as.character(GZmehm1)))) +
+  geom_histogram(color="white", fill="lightblue", binwidth=.5, position="dodge") +
+  ylim(0, 15000)+
+  labs(title = "Wellbeing score responses", caption = "GEDA (2014 - 2015)", x = "1=very bad | 5=very good", y = "Responses") +
+  scale_y_continuous(labels=comma) + 
+  theme_few() +
+  theme(panel.border = element_blank(), panel.grid.major = 
+          element_blank(), panel.grid.minor = 
+          element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+```
+
 
 
 ```{r}
@@ -75,6 +121,27 @@ ggplot(df_geda_num, aes(x=as.numeric(as.character(GZmehm1))))+
   theme_bw()
 ```
 
+```{r}
+var_sig <- read_csv("data/2.7_stat_sig_var.csv")
+
+ggplot(var_sig, aes(fill=condition, x=reorder(theme, -value), y=value)) +
+  geom_bar(position="stack", stat="identity") +
+  labs(title = "Statistically significant variables", x = " ", y = " ", caption = "GEDA (2014 - 2015)") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank()) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_fill_manual(values = c("gray", "lightblue"))
+
+
+```
+
+
 
 ```{r 2.7: Statistically Sig Variables}
 var_sig <- read_csv("data/2.7_stat_sig_var.csv")
@@ -83,6 +150,27 @@ ggplot(var_sig, aes(fill=condition, y=value, x=theme)) +
   geom_bar(position="stack", stat="identity")+
   theme(axis.text.x = element_text(angle = 90))
 ```
+
+```{r}
+psm_df <- read_csv("data/causal_PSM_scores.csv")
+
+labs <- paste("Visit general practitioner in LTM:", c("NO", "YES"))
+psm_df %>%
+  mutate(treated = ifelse(treated == 1, labs[1], labs[2])) %>%
+  ggplot(aes(x = predict_score)) +
+  geom_histogram(color = "white", fill = "lightblue") +
+  facet_wrap(~treated) +
+  labs(title = "Propensity score", subtitle = "Probability of not having visited GP in LTM", caption = "GEDA (2014 - 2015)", x = " ", y = " ") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+```
+
 
 ```{r Causal: PSM}
 
@@ -96,6 +184,8 @@ psm_df %>%
   facet_wrap(~treated) +
   xlab("Propensity Score (Prob. of NOT having visited GP in LTM)") +
   theme_bw()
+
+
 ```
 
 ```{r}
@@ -105,6 +195,54 @@ kable(mean_PSM_table) %>%
   add_header_above(c("Alias:","Last 12 Month: General Practitioner Visits","Gender (0:1)","Wellbeing Score (1:5)","Type of Smoker","German State of Residence","Household Type"))
 
 ```
+
+```{r}
+df_chart <- read_csv("data/distribution_marginal_effects.csv")
+
+p_worsen <-  ggplot(df_chart, aes(x=score_worsen)) + 
+  geom_histogram(color="white", fill="lightblue") +
+  ylim(0,100000) +
+  xlim(-0.25,0.25) +
+  labs(title="Worse-off", x = " ", y = " ") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+p_neutral <-  ggplot(df_chart, aes(x=score_ensuring)) + 
+  geom_histogram(color="white", fill="lightblue") +
+  ylim(0,100000) +
+  xlim(-0.25,0.25) +
+  labs(title="Same category", x = " ", y = " ") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+p_improve <- ggplot(df_chart, aes(x=score_improve)) + 
+  geom_histogram(color="white", fill="lightblue") +
+  ylim(0,100000) +
+  xlim(-0.25,0.25) +
+  labs(title="Improving", x = " ", y = " ") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+grid.arrange(grobs = list(p_worsen, p_neutral, p_improve), ncol=3,top="", caption = "GEDA (2014 - 2015)")
+
+
+```
+
 
 
 ```{r}
@@ -122,6 +260,29 @@ p_improve <- ggplot(df_chart, aes(x=score_improve)) +
 grid.arrange(grobs = list(p_worsen, p_neutral, p_improve), ncol=3,top="")
 ```
 
+```{r}
+df_chart <- read_csv("data/Impact_of_incremental_improvement.csv")
+p <- ggplot(df_chart, aes(x=reorder(`_changed`, -mean), y=mean)) + 
+  geom_bar(stat="identity", color="white", fill = "lightblue",
+           position=position_dodge()) +
+  geom_errorbar(aes(ymin=mean-std, ymax=mean+std),
+                width=.2,
+                position=position_dodge(.9)) +
+  coord_flip() +
+  labs(title = "Impact of incremental improvement on wellbeing score", subtitle = "rn = rank of recommendation", x = "Variables", y = "Mean", caption = "GEDA (2014 - 2015)") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+p
+
+
+```
 
 
 ```{r}
@@ -137,6 +298,30 @@ p
 
 ```{r}
 df_chart <- read_csv("data/Impact_of_simulating_incremental_change_worsen.csv")
+p <- ggplot(df_chart, aes(x=reorder(`_changed`, mean), y=mean)) + 
+  geom_bar(stat="identity", color="white", fill = "lightblue", 
+           position=position_dodge()) +
+  geom_errorbar(aes(ymin=mean-std, ymax=mean+std),
+                width=.2,
+                position=position_dodge(.9))  +
+  coord_flip() +
+  labs(title = "Impact of simulating incremental change", subtitle = "worsen the rating for wellbeing", x = "Variables", y = "Score", caption = "GEDA (2014 - 2015)") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+p
+
+```
+
+
+```{r}
+df_chart <- read_csv("data/Impact_of_simulating_incremental_change_worsen.csv")
 p <- ggplot(df_chart, aes(x=`_changed`, y=mean)) + 
   geom_bar(stat="identity", color="black", 
            position=position_dodge()) +
@@ -145,6 +330,25 @@ p <- ggplot(df_chart, aes(x=`_changed`, y=mean)) +
 p
 
 ```
+
+```{r}
+df_geda_LifeExp2 <- read_csv("data/Figure_12_LifeExpectancy_to_Well-Being_Score.csv")
+
+ggplot(df_geda_LifeExp2, aes(LifeExp, as.numeric(GZmehm1)*as.numeric(age5B)*as.numeric(sex)* as.numeric(bula))) +
+  geom_point(color = "lightblue") +
+  stat_smooth(method = "lm", formula = y ~ x) +
+  labs(title = "Life expectency vs wellbeing score", subtitle = "including age and gender", x = "Life Expectancy", y = "LifeExp ~ score * age * sex", caption = "GEDA (2014 - 2015)") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+```
+
 
 ```{r}
 #Life Expectancy Chart
@@ -180,3 +384,20 @@ df_chart_rf <- read_csv("data/df_cm_ord.csv")
 
 
 ```
+
+```{r}
+sub3 <- read_csv("data/3.4.2 Fig 6 subsettable.csv")
+colnames(sub3) = c('coeff_label', 'Men', 'Women','Men', 'Women','Men', 'Women','Men', 'Women','Men', 'Women','Men', 'Women','ThemeEn','VarLabelEn','textLabelEn')
+dat2 <- sub3[1:11,]
+dat3 <- kable(dat2, align = "c", booktabs = TRUE, caption = "Figure 6 - statistically significant comparison between men and women", escape = FALSE) %>% add_header_above(c(' ','Value'=2,'Std.Error'=2,'t value'=2,'P-value'=2,'sig_col'=2,'logodds'=2,' ',' ',' '))
+dat3
+```
+
+```{r}
+fig5 <- read_csv("data/Figure 5.csv")
+fig.5 <- fig5[,]
+fig.5 <- kable(fig.5, align = "c", booktabs = TRUE, caption = "Figure 5 - Example of important contributor to wellbeing, age category impact on wellbeing", escape = FALSE)
+fig.5
+```
+
+
