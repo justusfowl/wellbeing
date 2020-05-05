@@ -560,5 +560,22 @@ kable(df_var_list[196:260,], align = "l", booktabs = TRUE,  escape = FALSE, "lat
 kable(df_var_list[261:269,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("269.png")
 ```
 
+```{r, fig.width=15}
+df_barchart_group_ranking <- read_csv("data/grouped_barchart_ranking.csv")
+
+df_barchart_group_ranking <- df_barchart_group_ranking %>% dplyr::rename('Variable' = `_changed`)
+
+ggplot(df_barchart_group_ranking, aes(rn, count)) + geom_bar(aes(fill = Variable), 
+   width = 0.4, position = position_dodge(width=0.5), stat="identity") +
+    theme_bw() +
+  theme(panel.border = element_blank(), panel.grid.major = 
+          element_blank(), panel.grid.minor = 
+          element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+
+  ```
 
 
