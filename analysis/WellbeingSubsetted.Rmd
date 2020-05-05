@@ -33,6 +33,8 @@ library(randomForest)
 library(corrplot)
 library(pastecs)
 library(rms)
+library(magick)
+library(webshot)
 ```
 
 ```{r}
@@ -515,7 +517,7 @@ df_subsetall3 <- df_subsetall3[complete.cases(df_subsetall3),]
 ```
 
 ```{r}
-#describe(df_subsetall3)
+describe(df_subsetall3$sex)
 ```
 
 ##Training Data
@@ -564,7 +566,7 @@ df_model_sumt <- df_model_sumt %>% rename(Training_value = Value, Training_Std.E
 #library(kableExtra)
 
 df_model_sumt %>%
-  kable(booktabs = T, caption = "Training Data Table") %>%
+  kable(booktabs = T, caption = "Training Data Table" , digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -600,7 +602,7 @@ df_model_sumd <- df_model_sumd %>% left_join((df_meta_lvls %>% dplyr::select(c(c
 df_model_sumd <- df_model_sumd %>% rename(Full_value = Value, Full_Std.Error = `Std. Error`, Full_T.Value = `t value`, Full_p = p, Full_Sig = sig_col, Full_logodds = logodds)
 
 df_model_sumd %>%
-  kable(booktabs = T, caption = "Full Dataset Table") %>%
+  kable(booktabs = T, caption = "Full Dataset Table", digits = 4 ) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position"))
 #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
@@ -615,7 +617,7 @@ df_model_sumall <- df_model_sumall %>% dplyr::select(-c(Varname.y, VarLabelEn.y,
 df_model_sumall <- df_model_sumall %>% dplyr::select(c("coeff_label", "Full_value", "Training_value", "Full_Std.Error", "Training_Std.Error", "Full_T.Value", "Training_T.Value", "Full_p", "Training_p", "Full_Sig", "Training_Sig", "Full_logodds", "Training_logodds", "ThemeEn.x", "Varname.x", "VarLabelEn.x", "textLabelEn.x"))
 
 df_model_sumall %>%
-  kable(booktabs = T, caption = "Comparison of Training & Full Datasets") %>%
+  kable(booktabs = T, caption = "Comparison of Training & Full Datasets" , digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -624,29 +626,72 @@ df_model_sumall %>%
 ```
 
 
+
+
+```{r}
+df_model_sumd <- df_model_sumd %>% rename(Value = Full_value , Std_Error =  Full_Std.Error, T_Value = Full_T.Value, p_value = Full_p, Sig = Full_Sig, Logodds = Full_logodds)
+
+df_model_sumd <- df_model_sumd %>% dplyr::select(-c(Value, T_Value, Varname))
+
+df_model_sumd %>%
+  kable(booktabs = T, caption = "Full Dataset Table", digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position")) 
+```
+```{r}
+#setwd("C:/Users/jerim/Dropbox/GitHub/wellbeing/analysis")
+getwd()
+```
+
+
+```{r}
+df_model_sumd2 <- df_model_sumd 
+
+df_model_sumd2 <- df_model_sumd2[1:15,]
+
+
+df_model_sumd2 %>%
+  kable(booktabs = T, caption = "Age and Gender Example", digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
+  as_image()
+```
+
+
 ```{r}
 #Recreation of the significance for each variable theme, recreation of file titled 2.7_stat_sig_var.csv based on the significance in the full dataset model. 
-df_modelsig <- reshape2::dcast(df_model_sumd, ThemeEn ~ Full_Sig)
+df_modelsig <- reshape2::dcast(df_model_sumd, ThemeEn ~ Sig)
 df_modelsig$significant <- (df_modelsig$`*` + df_modelsig$`**` + df_modelsig$`***` + df_modelsig$.)
 df_modelsig <- df_modelsig %>% rename(Not_significant = Var.2)
 
 
 df_modelsig <- df_modelsig %>% dplyr::select(c(ThemeEn, significant, Not_significant))
-df_modelsig <- df_modelsig %>% pivot_longer(-ThemeEn, names_to = "Condition", values_to = "value")
-df_modelsig <- df_modelsig %>% rename()
+df_modelsig <- df_modelsig %>% pivot_longer(-ThemeEn, names_to = "condition", values_to = "value")
+
+df_modelsig <- df_modelsig %>% rename(theme = ThemeEn)
 
 df_modelsig %>%
-  kable(booktabs = T, caption = "Significance Table") %>%
+  kable(booktabs = T, caption = "Significance Table" , digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
-
+#write.csv(df_modelsig, "data/modelsig.csv")
 ```
 
 ```{r}
-ggplot(df_modelsig, aes(fill=Condition, y=value, x=ThemeEn)) + 
-  geom_bar(position="stack", stat="identity")+
-  theme(axis.text.x = element_text(angle = 90))
+var_sig3 <- read_csv("data/modelsig.csv")
+
+ggplot(var_sig3, aes(fill=condition, x=reorder(theme, -value), y=value)) +
+  geom_bar(position="stack", stat="identity") +
+  labs(title = "Statistically significant variables", x = " ", y = " ", caption = "GEDA (2014 - 2015)") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank()) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_fill_manual(values = c("gray", "lightblue"))
 ```
 
 
@@ -695,7 +740,7 @@ df_model_female <- df_model_female %>% left_join((df_meta_lvls %>% dplyr::select
 df_model_female <- df_model_female %>% rename(Female_value = Value, Female_Std.Error = `Std. Error`, Female_T.Value = `t value`, Female_p = p, Female_Sig = sig_col, Female_logodds = logodds)
 
 df_model_female %>%
-  kable(booktabs = T, caption = "Female Table") %>%
+  kable(booktabs = T, caption = "Female Table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -729,7 +774,7 @@ df_model_male <- df_model_male %>% left_join((df_meta_lvls %>% dplyr::select(c(c
 df_model_male <- df_model_male %>% rename(Male_value = Value, Male_Std.Error = `Std. Error`, Male_T.Value = `t value`, Male_p = p, Male_Sig = sig_col, Male_logodds = logodds)
 
 df_model_male %>%
-  kable(booktabs = T, caption = "Male Table") %>%
+  kable(booktabs = T, caption = "Male Table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -742,16 +787,22 @@ df_model_male %>%
 df_model_sumallsort <- df_model_sumd
 df_model_sumallsort <- df_model_sumallsort[c(1:220),]
 
-df_model_sumallsort$Full_logodds <- as.numeric(df_model_sumallsort$Full_logodds)
-df_model_sumallsort <- df_model_sumallsort[order(-df_model_sumallsort$Full_logodds),]
+df_model_sumallsort$Logodds <- as.numeric(df_model_sumallsort$Logodds)
+df_model_sumallsort <- df_model_sumallsort[order(-df_model_sumallsort$Logodds),]
+df_model_top10most <- df_model_sumallsort[1:10,]
+rownames(df_model_top10most) <- c()
 
-
-df_model_sumallsort %>%
-  kable(booktabs = T, caption = "Top 10 most likely to have a positive impact") %>%
+df_model_top10most %>%
+  kable(booktabs = T, caption = "Top 10 most likely to have a positive impact", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
 ```
+
+```{r}
+
+```
+
 
 ```{r}
 df_model_sumallRevsort <- df_model_sumd
@@ -762,7 +813,7 @@ df_model_sumallRevsort <- df_model_sumallRevsort[order(df_model_sumallRevsort$Fu
 
 
 df_model_sumallRevsort %>%
-  kable(booktabs = T, caption = "Top 10 most likely to have a negative impact") %>%
+  kable(booktabs = T, caption = "Top 10 most likely to have a negative impact", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position"))
 ```
 
@@ -776,7 +827,7 @@ df_model_genders <- df_model_genders %>% dplyr::select(c("coeff_label", "Male_va
 
 colnames(df_model_genders) = c('coeff_label', 'Men', 'Women','Men', 'Women','Men', 'Women','Men', 'Women','Men', 'Women','Men','Women', 'ThemeEn', 'VarLabelEn', 'TextLabelEn')
 df_model_genders %>%
-  kable(booktabs = T, caption = "Significance difference between men and women") %>%
+  kable(booktabs = T, caption = "Significance difference between men and women", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
   add_header_above(c(" ", "Value" = 2, "Std.Error"= 2, "T.value"= 2, "p-value"= 2, "Significant"= 2, "Logodds"= 2, " " =4)) #%>%
   #column_spec(2, border_left = T) %>%
@@ -790,7 +841,7 @@ df_model_genders %>%
 #Viewing the significance of various aspects of AGE & GENDER, which are or are not significant
 df_model_subsetAgeGender <- df_model_sumd %>% filter(str_detect(ThemeEn, "1701"))
 df_model_subsetAgeGender %>%
-  kable(booktabs = T, caption = "Age and Gender Significance") %>%
+  kable(booktabs = T, caption = "Age and Gender Significance", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -831,7 +882,7 @@ describe(df_subsetall3$AKoft12_k)
 df_model_subsetAlcohol <- df_model_sumd %>% filter(str_detect(ThemeEn, "1504"))
 
 df_model_subsetAlcohol %>%
-  kable(booktabs = T, caption = "Figure XX. Alcohol Frequency Consumed Significance Table") %>%
+  kable(booktabs = T, caption = "Figure XX. Alcohol Frequency Consumed Significance Table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -876,7 +927,7 @@ subsetAlcohol_df1$propWBNone <- subsetAlcohol_df1[,7]/(subsetAlcohol_df1[,2] + s
 
 
 subsetAlcohol_df1 %>%
-  kable(booktabs = T, caption = "Alcohol Population Table") %>%
+  kable(booktabs = T, caption = "Alcohol Population Table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
  # add_header_above(c(" ", "Frequency" = 6, "Frequency Proportion"= 6, "Well-being Proportion"= 6, " " =4)) #%>%
   #add_footnote("footnote")
@@ -892,7 +943,7 @@ subsetAlcohol_df1 %>%
 df_model_subsetDisease <- df_model_sumd %>% filter(str_detect(ThemeEn, "1101"))
 
 df_model_subsetDisease %>%
-  kable(booktabs = T, caption = "Disease Significance Table") %>%
+  kable(booktabs = T, caption = "Disease Significance Table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -913,7 +964,7 @@ subsetIBD_df1$propNo <- subsetIBD_df1[,3]/sum(subsetIBD_df1[,3])
 subsetIBD_df1 <- subsetIBD_df1 %>% rename(Yes = `1`, No = `2`)
 
 subsetIBD_df1 %>%
-  kable(booktabs = T, caption = "Irritable Bowel Syndrome Population Table") %>%
+  kable(booktabs = T, caption = "Irritable Bowel Syndrome Population Table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -936,7 +987,7 @@ subsetCirrhosis_df1$propNo <- subsetCirrhosis_df1[,3]/sum(subsetCirrhosis_df1[,3
 subsetCirrhosis_df1 <- subsetCirrhosis_df1 %>% rename(Yes = `1`, No = `2`)
 
 subsetCirrhosis_df1 %>%
-  kable(booktabs = T, caption = "Cirrhosis population table") %>%
+  kable(booktabs = T, caption = "Cirrhosis population table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -957,7 +1008,7 @@ subsetCancer_df1$propNo <- subsetCancer_df1[,3]/sum(subsetCancer_df1[,3])
 subsetCancer_df1 <- subsetCancer_df1 %>% rename(Yes = `1`, No = `2`)
 
 subsetCancer_df1 %>%
-  kable(booktabs = T, caption = "Cancer population table") %>%
+  kable(booktabs = T, caption = "Cancer population table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -980,7 +1031,7 @@ subsetHeartfailure_df1$propNo <- subsetHeartfailure_df1[,3]/(subsetHeartfailure_
 subsetHeartfailure_df1 <- subsetHeartfailure_df1 %>% rename(Yes = `1`, No = `2`)
 
 subsetHeartfailure_df1 %>%
-  kable(booktabs = T, caption = "Heart failure population table") %>%
+  kable(booktabs = T, caption = "Heart failure population table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -1011,13 +1062,13 @@ subsetHighBPthisyear_df1 <- subsetHighBPthisyear_df1 %>% rename(Yes = `1`, No = 
 subsetHighBPever_df1 <- subsetHighBPever_df1 %>% rename(Yes = `1`, No = `2`)
 
 subsetHighBPthisyear_df1 %>%
-  kable(booktabs = T, caption = "Training Table") %>%
+  kable(booktabs = T, caption = "Training Table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
 
 subsetHighBPever_df1 %>%
-  kable(booktabs = T, caption = "Ever diagnosed with high blood pressure population table") %>%
+  kable(booktabs = T, caption = "Ever diagnosed with high blood pressure population table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -1046,7 +1097,7 @@ subsetdiabetes_df1$propNo <- subsetdiabetes_df1[,3]/sum(subsetdiabetes_df1[,3])
 subsetHighBPthisyear_df1 <- subsetHighBPthisyear_df1 %>% rename(Yes = `1`, No = `2`)
 
 subsetdiabetes_df1 %>%
-  kable(booktabs = T, caption = "Diabetes population table") %>%
+  kable(booktabs = T, caption = "Diabetes population table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -1057,7 +1108,7 @@ subsetdiabetes_df1 %>%
 df_model_subsetDisability <- df_model_sumd %>% filter(str_detect(ThemeEn, "1105"))
 
 df_model_subsetDisability %>%
-  kable(booktabs = T, caption = "Fig XX: Disability significance table") %>%
+  kable(booktabs = T, caption = "Fig XX: Disability significance table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -1072,7 +1123,7 @@ subsetLowerBack12mos_df1$propNo <- subsetLowerBack12mos_df1[,3]/sum(subsetLowerB
 subsetLowerBack12mos_df1 <- subsetLowerBack12mos_df1 %>% rename(Yes = `1`, No = `2`)
 
 subsetLowerBack12mos_df1 %>%
-  kable(booktabs = T, caption = "Lower back population table") %>%
+  kable(booktabs = T, caption = "Lower back population table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -1085,7 +1136,7 @@ subsetNeckSpine12mos_df1$propNo <- subsetNeckSpine12mos_df1[,3]/sum(subsetNeckSp
 subsetNeckSpine12mos_df1 <- subsetNeckSpine12mos_df1 %>% rename(Yes = `1`, No = `2`)
 
 subsetNeckSpine12mos_df1 %>%
-  kable(booktabs = T, caption = "Neck & spine population table") %>%
+  kable(booktabs = T, caption = "Neck & spine population table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -1099,7 +1150,7 @@ subsetOfficialDisable_df1$propNo <- subsetOfficialDisable_df1[,3]/sum(subsetOffi
 subsetOfficialDisable_df1 <- subsetOfficialDisable_df1 %>% rename(Yes = `1`, No = `2`)
 
 subsetOfficialDisable_df1 %>%
-  kable(booktabs = T, caption = "Officially disable population table") %>%
+  kable(booktabs = T, caption = "Officially disable population table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -1112,7 +1163,7 @@ df_model_subsetHealth <- df_model_sumd %>% filter(str_detect(ThemeEn, "1102"))
 
 df_model_subsetHealth %>%
   kable(booktabs = T, caption = "Fig XX: Health focus and limitations significance table") %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
+  kable_styling(bootstrap_options = c("striped", "hold_position", digits = 4)) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
 ```
@@ -1128,7 +1179,7 @@ subsetChronicDiseases_df1$propNo <- subsetChronicDiseases_df1[,3]/(subsetChronic
 subsetChronicDiseases_df1 <- subsetChronicDiseases_df1 %>% rename(Yes = `1`, No = `2`)
 
 subsetChronicDiseases_df1 %>%
-  kable(booktabs = T, caption = "Chronic disease population table") %>%
+  kable(booktabs = T, caption = "Chronic disease population table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -1142,7 +1193,7 @@ subsetChronicDiseases_df2$propNotlimited <- subsetChronicDiseases_df2[,4]/sum(su
 subsetChronicDiseases_df2 <- subsetChronicDiseases_df2 %>% rename(Strongly_Limited = `1`, Moderately_Restricted = `2`, Not_Limited = `3`)
 
 subsetChronicDiseases_df2 %>%
-  kable(booktabs = T, caption = "Fig XX. Restricted/limited population table") %>%
+  kable(booktabs = T, caption = "Restricted/limited population table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -1153,7 +1204,7 @@ subsetChronicDiseases_df2 %>%
 df_model_subsetMedicines <- df_model_sumd %>% filter(str_detect(ThemeEn, "1403"))
 
 df_model_subsetMedicines %>%
-  kable(booktabs = T, caption = "Medication Significane") %>%
+  kable(booktabs = T, caption = "Medication Significance", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -1166,7 +1217,7 @@ subsetTakingmeds_df1$propNo <- subsetTakingmeds_df1[,3]/sum(subsetTakingmeds_df1
 subsetTakingmeds_df1 <- subsetTakingmeds_df1 %>% rename(Yes = `1`, No = `2`)
 
 subsetTakingmeds_df1 %>%
-  kable(booktabs = T, caption = "Taking medication population table") %>%
+  kable(booktabs = T, caption = "Taking medication population table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -1174,13 +1225,13 @@ subsetTakingmeds_df1 %>%
 
 ```{r}
 subsetTakingmeds_df2 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ AMfrei)
-subsetTakingmeds_df2$propYes <- subsetTakingmeds_df1[,2]/sum(subsetTakingmeds_df1[,2])
-subsetTakingmeds_df2$propNo <- subsetTakingmeds_df1[,3]/sum(subsetTakingmeds_df1[,3])
+subsetTakingmeds_df2$propYes <- subsetTakingmeds_df2[,2]/sum(subsetTakingmeds_df2[,2])
+subsetTakingmeds_df2$propNo <- subsetTakingmeds_df2[,3]/sum(subsetTakingmeds_df2[,3])
 subsetTakingmeds_df2 <- subsetTakingmeds_df2 %>% rename(Yes = `1`, No = `2`)
 
 subsetTakingmeds_df2 %>%
-  kable(booktabs = T, caption = "Taking medications 2 population table") %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
+  kable(booktabs = T, caption = "Taking medications 2 population table", digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
 ```
@@ -1190,7 +1241,7 @@ subsetTakingmeds_df2 %>%
 df_model_subsetMentalHealth <- df_model_sumd %>% filter(str_detect(ThemeEn, "1301"))
 
 df_model_subsetMentalHealth %>%
-  kable(booktabs = T, caption = "Mental health significance table") %>%
+  kable(booktabs = T, caption = "Mental health significance table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -1201,7 +1252,7 @@ df_model_subsetMentalHealth %>%
 df_model_subsetMigration <- df_model_sumd %>% filter(str_detect(ThemeEn, "1705"))
 
 df_model_subsetMigration %>%
-  kable(booktabs = T, caption = "Birthplace and citizenship significance table") %>%
+  kable(booktabs = T, caption = "Birthplace and citizenship significance table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
@@ -1229,7 +1280,7 @@ subsetgermanborn_df1$propNonEU <- subsetgermanborn_df1[,4]/(subsetgermanborn_df1
 subsetgermanborn_df1 <- subsetgermanborn_df1 %>% rename(Germany = `10`, Other_EU_Country = `21`, Non_EU_Country = `22`)
 
 subsetgermanborn_df1 %>%
-  kable(booktabs = T, caption = "Fig XX: Birthplace population table", digits = 4) %>%
+  kable(booktabs = T, caption = "Birthplace population table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
   add_header_above(c(" ", "Population" = 3, "Population Proportion"= 3, "Proportion Well-being Cat" = 3)) #%>%
   #add_footnote("footnote")
@@ -1257,8 +1308,8 @@ subsetgermancitizen_df1$propNonEU <- subsetgermancitizen_df1[,4]/(subsetgermanci
 subsetgermancitizen_df1 <- subsetgermancitizen_df1 %>% rename(Germany = `10`, Other_EU_Country = `21`, Non_EU_Country = `22`)
 
 subsetgermancitizen_df1 %>%
-  kable(booktabs = T, caption = "Fig XX:Citizenship population table", digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
+  kable(booktabs = T, caption = "Citizenship population table", digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
   add_header_above(c(" ", "Population" = 3, "Population Proportion"= 3, "Proportion Well-being Cat" = 3)) #%>%
   #add_footnote("footnote")
 
@@ -1407,7 +1458,7 @@ subsetQOLIntensity_df1 %>%
 #Viewing the significance of various aspects of SIGHT AND HEARING, which are or are not significant
 df_model_subsetSeeandHear <- df_model_sumd %>% filter(str_detect(ThemeEn, "1104"))
 df_model_subsetSeeandHear %>%
-  kable(booktabs = T, caption = "Sighte & hearing significance table", digits = 4) %>%
+  kable(booktabs = T, caption = "Sight & hearing significance table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
   add_header_above(c(" ", "Population" = 6, "Population Proportion"= 6, "Proportion Well-being Cat" = 6)) #%>%
   #add_footnote("footnote")
@@ -1418,7 +1469,7 @@ df_model_subsetSeeandHear %>%
 #Viewing the significance of various aspects of SMOKING, which are or are not significant
 df_model_subsetSmoking <- df_model_sumd %>% filter(str_detect(ThemeEn, "1505"))
 df_model_subsetSmoking %>%
-  kable(booktabs = T, caption = "Fig XX: Smoking significance table", digits = 4) %>%
+  kable(booktabs = T, caption = "Smoking significance table", digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
   #add_header_above(c(" ", "Population" = 6, "Population Proportion"= 6, "Proportion Well-being Cat" = 6)) #%>%
   #add_footnote("footnote")
@@ -1452,44 +1503,52 @@ subsetsmoke_df1 %>%
 ```{r}
 #Viewing the significance of various aspects of SOCIODEMOGRAPHICS, which are or are not significant
 df_model_subsetSociodem <- df_model_sumd %>% filter(str_detect(ThemeEn, "1704"))
-df_model_subsetSociodem %>% 
-  kable() %>%
-  kable_styling()
+df_model_subsetSociodem %>%
+  kable(booktabs = T, caption = "Sociodemographics", digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" ", "Population" = 4, "Population Proportion"= 4, "Proportion Well-being Cat" = 4)) #%>%
+  #add_footnote("footnote")
 ```
 
 ### Employment Subsets
 
 ```{r}
 
-subsetemployment_df1 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ SDaeqeink_k)
-subsetemployment_df1$WBemployed <- subsetemployment_df1[,2]/sum(subsetemployment_df1[,2])
-subsetemployment_df1$WBunemployed <- subsetemployment_df1[,3]/sum(subsetemployment_df1[,3])
-subsetemployment_df1$student <- subsetemployment_df1[,4]/sum(subsetemployment_df1[,4])
-subsetemployment_df1$WBretired <- subsetemployment_df1[,5]/sum(subsetemployment_df1[,5])
-subsetemployment_df1$WBunabletoacquire <- subsetemployment_df1[,6]/sum(subsetemployment_df1[,6])
-subsetemployment_df1$WBmilcivservice <- subsetemployment_df1[,7]/sum(subsetemployment_df1[,7])
-subsetemployment_df1$WBhouse <-  subsetemployment_df1[,8]/sum(subsetemployment_df1[,8])
-subsetemployment_df1$WBmoveinactive <- subsetemployment_df1[,9]/sum(subsetemployment_df1[,9])
+subsetincome_df1 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ SDaeqeink_k)
+subsetincome_df1$WBLess500 <- subsetincome_df1[,2]/sum(subsetincome_df1[,2])
+subsetincome_df1$WB500to1000 <- subsetincome_df1[,3]/sum(subsetincome_df1[,3])
+subsetincome_df1$WB1000to1500 <- subsetincome_df1[,4]/sum(subsetincome_df1[,4])
+subsetincome_df1$WB1500to2000 <- subsetincome_df1[,5]/sum(subsetincome_df1[,5])
+subsetincome_df1$WB2000to2500 <- subsetincome_df1[,6]/sum(subsetincome_df1[,6])
+subsetincome_df1$WB2500to3000 <- subsetincome_df1[,7]/sum(subsetincome_df1[,7])
+subsetincome_df1$WB3000to3500 <- subsetincome_df1[,8]/sum(subsetincome_df1[,8])
+subsetincome_df1$WB3500to4000 <-  subsetincome_df1[,9]/sum(subsetincome_df1[,9])
+subsetincome_df1$WB4000to4500 <- subsetincome_df1[,10]/sum(subsetincome_df1[,10])
+subsetincome_df1$WB4500to5000 <- subsetincome_df1[,11]/sum(subsetincome_df1[,11])
+subsetincome_df1$WBMore5000 <- subsetincome_df1[,12]/sum(subsetincome_df1[,12])
 
-subsetemployment_df1$employed <- subsetemployment_df1[,2]/(subsetemployment_df1[,2] + subsetemployment_df1[,3] + subsetemployment_df1[,4] + subsetemployment_df1[,5] + subsetemployment_df1[,6] + subsetemployment_df1[,7] + subsetemployment_df1[,8] + subsetemployment_df1[,9])
-subsetemployment_df1$unemployed <- subsetemployment_df1[,3]/(subsetemployment_df1[,2] + subsetemployment_df1[,3] + subsetemployment_df1[,4] + subsetemployment_df1[,5] + subsetemployment_df1[,6] + subsetemployment_df1[,7] + subsetemployment_df1[,8] + subsetemployment_df1[,9])
-subsetemployment_df1$student <- subsetemployment_df1[,4]/(subsetemployment_df1[,2] + subsetemployment_df1[,3] + subsetemployment_df1[,4] + subsetemployment_df1[,5] + subsetemployment_df1[,6] + subsetemployment_df1[,7] + subsetemployment_df1[,8] + subsetemployment_df1[,9])
-subsetemployment_df1$retired <- subsetemployment_df1[,5]/(subsetemployment_df1[,2] + subsetemployment_df1[,3] + subsetemployment_df1[,4] + subsetemployment_df1[,5] + subsetemployment_df1[,6] + subsetemployment_df1[,7] + subsetemployment_df1[,8] + subsetemployment_df1[,9])
-subsetemployment_df1$unabletoacquire <- subsetemployment_df1[,5]/(subsetemployment_df1[,2] + subsetemployment_df1[,3] + subsetemployment_df1[,4] + subsetemployment_df1[,5] + subsetemployment_df1[,6] + subsetemployment_df1[,7] + subsetemployment_df1[,8] + subsetemployment_df1[,9])
-subsetemployment_df1$milcivservice <- subsetemployment_df1[,5]/(subsetemployment_df1[,2] + subsetemployment_df1[,3] + subsetemployment_df1[,4] + subsetemployment_df1[,5] + subsetemployment_df1[,6] + subsetemployment_df1[,7] + subsetemployment_df1[,8] + subsetemployment_df1[,9])
-subsetemployment_df1$house <- subsetemployment_df1[,5]/(subsetemployment_df1[,2] + subsetemployment_df1[,3] + subsetemployment_df1[,4] + subsetemployment_df1[,5] + subsetemployment_df1[,6] + subsetemployment_df1[,7] + subsetemployment_df1[,8] + subsetemployment_df1[,9])
-subsetemployment_df1$moveinactive <- subsetemployment_df1[,5]/(subsetemployment_df1[,2] + subsetemployment_df1[,3] + subsetemployment_df1[,4] + subsetemployment_df1[,5] + subsetemployment_df1[,6] + subsetemployment_df1[,7] + subsetemployment_df1[,8] + subsetemployment_df1[,9])
+subsetincome_df1$Less500 <- subsetincome_df1[,2]/(subsetincome_df1[,2] + subsetincome_df1[,3] + subsetincome_df1[,4] + subsetincome_df1[,5] + subsetincome_df1[,6] + subsetincome_df1[,7] + subsetincome_df1[,8] + subsetincome_df1[,9] + subsetincome_df1[,10] + subsetincome_df1[,11] + subsetincome_df1[,12])
+subsetincome_df1$E500to1000 <- subsetincome_df1[,3]/(subsetincome_df1[,2] + subsetincome_df1[,3] + subsetincome_df1[,4] + subsetincome_df1[,5] + subsetincome_df1[,6] + subsetincome_df1[,7] + subsetincome_df1[,8] + subsetincome_df1[,9] + subsetincome_df1[,10] + subsetincome_df1[,11] + subsetincome_df1[,12])
+subsetincome_df1$E1000to1500 <- subsetincome_df1[,4]/(subsetincome_df1[,2] + subsetincome_df1[,3] + subsetincome_df1[,4] + subsetincome_df1[,5] + subsetincome_df1[,6] + subsetincome_df1[,7] + subsetincome_df1[,8] + subsetincome_df1[,9] + subsetincome_df1[,10] + subsetincome_df1[,11] + subsetincome_df1[,12])
+subsetincome_df1$E1500to2000 <- subsetincome_df1[,5]/(subsetincome_df1[,2] + subsetincome_df1[,3] + subsetincome_df1[,4] + subsetincome_df1[,5] + subsetincome_df1[,6] + subsetincome_df1[,7] + subsetincome_df1[,8] + subsetincome_df1[,9] + subsetincome_df1[,10] + subsetincome_df1[,11] + subsetincome_df1[,12])
+subsetincome_df1$E2000to2500 <- subsetincome_df1[,6]/(subsetincome_df1[,2] + subsetincome_df1[,3] + subsetincome_df1[,4] + subsetincome_df1[,5] + subsetincome_df1[,6] + subsetincome_df1[,7] + subsetincome_df1[,8] + subsetincome_df1[,9] + subsetincome_df1[,10] + subsetincome_df1[,11] + subsetincome_df1[,12])
+subsetincome_df1$E2500to3000 <- subsetincome_df1[,7]/(subsetincome_df1[,2] + subsetincome_df1[,3] + subsetincome_df1[,4] + subsetincome_df1[,5] + subsetincome_df1[,6] + subsetincome_df1[,7] + subsetincome_df1[,8] + subsetincome_df1[,9] + subsetincome_df1[,10] + subsetincome_df1[,11] + subsetincome_df1[,12])
+subsetincome_df1$E3000to3500 <- subsetincome_df1[,8]/(subsetincome_df1[,2] + subsetincome_df1[,3] + subsetincome_df1[,4] + subsetincome_df1[,5] + subsetincome_df1[,6] + subsetincome_df1[,7] + subsetincome_df1[,8] + subsetincome_df1[,9] + subsetincome_df1[,10] + subsetincome_df1[,11] + subsetincome_df1[,12])
+subsetincome_df1$E3500to4000 <- subsetincome_df1[,9]/(subsetincome_df1[,2] + subsetincome_df1[,3] + subsetincome_df1[,4] + subsetincome_df1[,5] + subsetincome_df1[,6] + subsetincome_df1[,7] + subsetincome_df1[,8] + subsetincome_df1[,9] + subsetincome_df1[,10] + subsetincome_df1[,11] + subsetincome_df1[,12])
+subsetincome_df1$E4000to4500 <- subsetincome_df1[,10]/(subsetincome_df1[,2] + subsetincome_df1[,3] + subsetincome_df1[,4] + subsetincome_df1[,5] + subsetincome_df1[,6] + subsetincome_df1[,7] + subsetincome_df1[,8] + subsetincome_df1[,9] + subsetincome_df1[,10] + subsetincome_df1[,11] + subsetincome_df1[,12])
+subsetincome_df1$E4500to5000 <- subsetincome_df1[,11]/(subsetincome_df1[,2] + subsetincome_df1[,3] + subsetincome_df1[,4] + subsetincome_df1[,5] + subsetincome_df1[,6] + subsetincome_df1[,7] + subsetincome_df1[,8] + subsetincome_df1[,9] + subsetincome_df1[,10] + subsetincome_df1[,11] + subsetincome_df1[,12])
+subsetincome_df1$EMore5000 <- subsetincome_df1[,12]/(subsetincome_df1[,2] + subsetincome_df1[,3] + subsetincome_df1[,4] + subsetincome_df1[,5] + subsetincome_df1[,6] + subsetincome_df1[,7] + subsetincome_df1[,8] + subsetincome_df1[,9] + subsetincome_df1[,10] + subsetincome_df1[,11] + subsetincome_df1[,12])
 
-
+subsetincome_df1 <- subsetincome_df1 %>% rename(ELess_500 = `1`, E_500to1000 = `2`, E_1000to1500 = `3`, E_1500to2000 = `4`, E_2000to2500 = `5`, E_2500to3000 = `6`, E_3000to3500 = `7`, E_3500to4000 = `8`, E_4000to4500 =`9`, E_4500to5000 =`10`, E_More_5000 =`11`)
 #subsetemployment_df1 <- subsetemployment_df1 %>% rename(employed = `1`, Unemployed = `2`, Student = `3`, Retired = `4`, Unabletoacquire = `5`, MilCivService = `6`, House = `7`, Inactive = `8`)
 
 
-#subsetemployment_df1 %>%
-#  kable(booktabs = T, caption = "Employment status/type population table", digits = 4) %>%
-#  kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
-#  add_header_above(c(" ", "Population" = 8, "Population Proportion"= 8, "Proportion Well-being Cat" = 8)) #%>%
+subsetincome_df1 %>%
+  kable(booktabs = T, caption = "Income population table", digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
+  add_header_above(c(" ", "Population" = 11, "Population Proportion"= 11, "Proportion Well-being Cat" = 11)) #%>%
   #add_footnote("footnote")
-subsetemployment_df1
+#subsetincome_df1
 ```
 
 
