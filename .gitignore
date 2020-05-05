@@ -13,6 +13,7 @@ analysis/local/
 
 analysis/*.csv
 paper/data/
+paper/*.png
 *.Rproj
 *.Rhistory
 .gitignore
