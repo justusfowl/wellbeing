@@ -1,0 +1,2452 @@
+---
+title: "CausalFeatureEngineering"
+author: "Uli Kaulfuss"
+date: "17 Januar 2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+set.seed(42)
+
+library(car)
+library(caret)
+library(cluster)
+library(corrplot)
+library(dummies)
+library(dplyr)
+library(foreign)
+library(gdata)
+library(glmnet)
+library(ggplot2)
+library(Hmisc)
+library(kableExtra)
+library(knitr)
+library(magick)
+library(MASS)
+library(MatchIt)
+library(naniar)
+library(nnet)
+library(pastecs)
+library(pdp)
+library(readr)
+library(readxl)
+library(reshape2)
+library(rms)
+library(stargazer)
+library(stringi)
+library(tidyr)
+library(tidyverse)
+library(VIM)
+library(webshot)
+# library(readstata13)
+# library(performanceEstimation)
+
+```
+
+# Objective
+
+The purpose of this analysis is to understand and quantify the different drivers that contribute to good wellbeing (good / very good = GZmehm1) in order to give individual advice to improve peoples' lives.
+
+The response variable GZmehm1 is a rating of individual wellbeing on a 5-step scale 1= very bad | 5=very good. 
+
+```{r, echo=F}
+load(file = "data/geda_data.RData")
+hist(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1), breaks=.5:5.5, main="Histogram of the wellbeing score (response)", xlab="1=very bad | 5=very good")
+```
+
+
+```{r, echo=F}
+# Import data dictionary / meta data of responses
+
+df_meta_lvls <- read_excel("data.doc/GEDA14_Variablenuebersicht_Analyse.xlsx", sheet='levels')
+df_meta_lvls$numLevel <- as.numeric(df_meta_lvls$numLevel)
+```
+
+# Feature engineering: 
+Combining features for causal analysis in accordance with the survey
+
+```{r, echo=F}
+
+# Load all the variables that seem relevant in the raw first place
+
+df_overall <- df_geda_num %>% dplyr::select(c(
+ABschichtC, #Shift and night work
+ABsubjB, #Health risk from work
+ABtragen, #Lifting and / or carrying heavy loads
+age5B, #Age (5-year groups)
+AKbingeC_k, #Binge drinking (> = 6 alk. Drinks. On one occasion) in 4 Cat.
+AKechi47, #Hazardous alcohol consumption (ECHI 47;> 20/40 g / day)
+AKoft12_k, #Alcohol i.d.l. 12 months in 6 Cat.
+AKrisiko, #Hazardous alcohol consumption (> 20.10 g / day)
+AKrisiko2, #Hazardous alcohol consumption (> 20.10 g / day) 4 Kat.
+AMarztB, #Taking medications v. Doctor prescribed i.d.l. 2 Where
+AMfrei, #v not taking medication. Doctor prescribed i.d.l. 2 Where
+AUarbC, #not due to illness to work: I.d.l. 12 Mon.
+AUarbzD_k, #not due to illness to work: weeks
+BBbehB, #Officially recognized disability
+BBbehzC_k, #kat degree of disability.
+BBblas12B, #Urinary incontinence: I.d.l.12 Mon.
+BBdors112, #Lower back pain: I.d.l.12 Mon.
+BBdors212, #Complaints neck, cervical spine: I.d.l.12 Mon.
+BBgehen, #Schwierigk. when walking without walking aids at 500m
+BBmyo12, #Chronic pain after heart attack: I.d.l.12 Mon.
+BBsa12, #Chronic plaints. following a stroke: I.d.l.12 Mon.
+BBtreppe, #Schwierigk. Staircase with 12 steps
+BLpflege2C, #Support / care of others
+BLpflegedauB, #Support / Care: Hours per week
+bula, #state
+ENgemB, #Consumption of vegetables
+ENgemBz1, #Consumption of vegetables: per day
+ENobstB, #Consumption of fruit
+ENobstBz1, #Consumption of fruits: per day
+GVasku1, #Reliance on prop. Diffic skills. situations
+GZmehm1, #Gen. health status
+GZmehm2D, #Limited by disease for min. 6 months
+GZmehm3C, #Chronic diseases
+GZsubj1, #Pay attention to health
+IAambC, #Day patient in the hospital i.d.l. 12 Mon.
+IAambC_k, #Day patient in the hospital i.d.l. 12 month .: number of shots (top coding 10 or more)
+IAarzt14B, #Dental examination
+IAarzt1B, #Visit general practitioners or family doctor
+IAarzt1B12_k, #Visit general practitioners or family doctor i.d.l. 12 month .: Number (top coding 20 or more)
+IAarzt1B4w, #Visit general practitioners or family doctor i.d.l. 4 weeks: Number
+IAarzt8C, #Visit psychologists i.d.l. 12 Mon.
+IAcholus, #Last blood fat determination
+IAdiabus, #Last blood glucose monitoring
+IAfa, #Visiting Specialist
+IAfa12_k, #Visiting Specialist i.d.l. 12 month .: Number (top coding 20 or more)
+IAfa4w, #Visiting Specialist i.d.l. 4 weeks: Number
+IAhypus, #Last blood pressure measurement
+IAkfutyp2B_lz, #Last stool test
+IAkfutyp4B_lz, #Last colonoscopy
+IAkfutyp5B_lz, #Last cervical smear
+IAkfutyp7B_lz, #Last mammography
+IAkfutyp7Bgr, #Reason for the last mammogram
+IAkhs, #Stationary i.d.l. in hospital 12 Mon.
+IAkhs_k, #Stationary i.d.l. in hospital 12 month .: Number of nights (cat)
+IAkosten1, #US Required / n treatment. Affordable i.d.l. 12 month .: Physicians. US / treatment
+IAkosten2, #US Required / n treatment. Affordable i.d.l. 12 month .: Zahnärztl. US / treatment
+IAkosten3, #US Required / n treatment. Affordable i.d.l. 12 month .: Prescribed Med.
+IAkosten4, #US Required / n treatment. Affordable i.d.l. 12 month .: US / psy treatment. Prob.
+IAkv1D, #Health Insurance in 3 Cat.
+IApflege, #Use of home care services: I.d.l. 12 Mon.
+IAtermin, #i.d.l. waiting for examination appointment 12 Mon.
+IAther2B, #Visit physiotherapists i.d.l. 12 Mon
+IAweg, #Investigation delayed due i.d.l. Distance 12 Mon.
+IPinfl1314B, #Flu vaccination winter season 2013/2014 generated
+IPinfl1415B, #Flu vaccination winter season 2014/2015 generated
+IPinfl4, #Last flu shot
+IPinfl4_jj, #Last flu shot: Year
+IPinfl4_mm, #Last flu shot: Month
+IPinfl6B, #Frequency flu vaccine generated
+IPtet, #Ever tetanus vaccination
+IPtet_lz, #Last tetanus shot
+KAabka, #Moderate to very strenuous arbeitsbez. körp. activity
+KAehispaq1, #Activities (effort)
+KAehispaq2, #Movement on foot: days a week
+KAehispaq3, #Movement on foot: Duration
+KAehispaq4, #Movement with bicycle: days a week
+KAehispaq5, #Movement with bicycle: Duration
+KAehispaq6, #Sports: days a week
+KAehispaq8, #Building / strengthening: days a week
+KAgfa, #> = 150 min Ausdaueraktiv.und 2x / week Active. for Muskelkräft. (stop. WHO both Sens.)
+KAgfka, #Stop. aerobic WHO Bew.empf. (With Go> = 150 min. Aerobic körp. Aktiv./Wo)
+KAgfka1, #Stop. aerobic WHO Bew.empf. (O. Go> = 150 aerobic körp. Aktiv./Wo min.)
+KAgfmk, #WHO Rec. to Muskelkräft. (> = 2x / wk. Activities. To strengthen the muscles)
+KAgka, #Sufficient körp. active during work or leisure
+KAgka_k, #total activity
+KAsabka, #Very strenuous work-related physical activity
+KAspodauC_k, #Sports week in total (category Siert in 30 min)
+KAtbka_k, #Transportbez. körp. Activity in MET / hours / week (top coding from 100h)
+KHab12, #Asthma: I.d.l.12 Mon.
+KHalgi112, #Allergies: I.d.l. 12 Mon.
+KHbbmyo12, #Heart attack / chron. Plaints .: I.d.l. 12 Mon.
+KHbbsa12, #Stroke / chron. Complaints resulting SA: I.d.l.12 Mon.
+KHcb12, #Chronic bronchitis: I.d.l.12 Mon.
+KHced12, #Inflammatory bowel disease: I.d.l.12 Mon.
+KHcle12, #Other chronic liver diseases: I.d.l.12 Mon.
+KHdge12, #Osteoarthritis: I.d.l.12 Mon.
+KHdiabB12, #Diabetes: I.d.l.12 Mon.
+KHhi12, #Heart failure: I.d.l.12 Mon.
+KHhyp, #Hypertension: Ever diagnosed medically
+KHhyp12, #Hypertension: I.d.l.12 Mon.
+KHhyp12pB, #Indicator bek. (Ärztl. Diagn.) Hypertension pressure i.d.l. 12 Mon
+KHhypmedC, #Indicator antihypertensive agents with known hypertension
+KHkarz12, #Cancer: I.d.l.12 Mon.
+KHkhk12, #Coronary heart disease / angina pectoris: I.d.l.12 Mon.
+KHlip12A, #Elevated blood lipids / Chol .: I.d.l.12 Mon.
+KHlipA, #Ever elevated blood lipids / Cholesterinw. (Physician diagnosis)
+KHlipmedA, #Elevated cholesterol: Currently taking medication
+KHlz12, #Cirrhosis: I.d.l.12 Mon.
+KHmyo12, #Heart Attack: I.d.l. 12 Mon.
+KHniB12, #. Chronic kidney problems: I.d.l.12 Mon.
+KHos12, #Osteoporosis: I.d.l.12 Mon.
+KHra12, #Arthritis: I.d.l.12 Mon.
+KHsa12, #Stroke: I.d.l.12 Mon.
+KHulc12, #Gastric or duodenal ulcer: I.d.l.12 Mon.
+LQsf367C, #Strength pain i.d.l. 4 weeks
+LQsf368C, #Disability in daily activities due to pain i.d.l. 4 weeks
+LQzufrB10, #overall life satisfaction
+MIbirthplace, #Country of birth (EHIS)
+MIcitizen, #nationality
+PAadiposB, #Obesity according to WHO (BMI> = 30; from self-declaration)
+PAbmiB_k, #BMI moiety (from self-specification)
+PAbmiB_k2, #BMI grouping detaill. (From self-specification)
+PAfam3, #Living together in marriage or cohabitation
+PAgewiB, #Body weight (self-specification) [kg]
+PAgroe, #Height (self-specification) [cm]
+PAhh_k, #Number of people in household (cat.)
+PAhhtype, #household type
+PAueberB, #Obesity according to WHO (BMI> = 25; from self-declaration)
+PKdep12, #Depression: I.d.l. 12 Mon.
+PKphq1, #Adversely. i.d.l. 2 Where .: Little interest / pleasure in your activities
+PKphq2, #Adversely. i.d.l. 2 Where .: dejection, melancholy / hopelessness
+PKphq3, #Adversely. i.d.l. 2 Where .: Schwierigk., On / od asleep. Increased sleep
+PKphq4, #Adversely. i.d.l. 2 Where .: fatigue / feeling, k. to have power
+PKphq5, #Adversely. i.d.l. 2 Where .: Vermind. Appetite / excessive need to eat
+PKphq6, #Adversely. i.d.l. 2 Where v .: Poor opinion. yourself; to disappointments failure / family.
+PKphq7, #Adversely. i.d.l. To focus 2 Where .: Schwierigk.
+PKphq8, #Adversely. i.d.l. 2 Where .: change in movement or speech
+PKphq8diag, #PHQ-8: Diagnostic Cat.
+RC_ak, #Start smoking: age (cat.)
+RCex_ak, #End Smoking: age (cat.)
+RCpass4, #Smoking in enclosed spaces
+RCpassort_m1, #Passive smoking: Work
+RCpassort_m2, #Passive Smoking: at home
+RCpassort_m3, #Passive smoking: pubs / cafes / bars / disco
+RCpassort_m4, #Passive smoking restaurant
+RCpassort_m5, #Passive smoking: friends / acquaintances
+RCpassort_m6, #Passive smoking: Change village
+RCpassort_m7, #Passive smoking: public. building
+RCstat, #Smoke
+RCtyp_m1, #Tobacco products: Factory-built cigarettes
+RCtyp_m2, #Tobacco Products: Hand-rolled cigarettes
+RCtyp_m3, #Tobacco products: cigars, cigarillos
+RCtyp_m4, #Tobacco products: pipe tobacco
+RCtyp_m6, #Tobacco products: Miscellaneous
+RCtyp_m7, #Tobacco Products: E-Cigarette
+RCtyphaupt, #Mainly smoked Takabprodukt
+RCz2B_ttk, #Hand-rolled cigarettes daily: (cat.) Number
+RCz2B_wwk, #-Rolled cigarettes weekly: Quantity (kat)
+RCzA_ttk, #Daily. Smoking: Tgl. Number of cigarettes (cat.)
+RCzA_wwk, #Cigarettes weekly (cat.) No.
+SDaeqeink_k, #Equivalent income (imputed, kat) [€]
+SDalo, #Unemployed i.d.l. 5 years
+SDalo_mmk, #Unemployed: total months i.d.l. 5 years (cat.)
+SDalogz, #Change in health by unemployment
+SDalokh, #Unemployment to do with disease
+SDbest, #Professional status in main job
+SDbest_lz, #Professional status in last main job
+SDbild1D, #Highest general. Bildener school
+SDbild4C, #Highest berufl. Training or university / college degree
+SDbverh, #Type of last employment
+SDbverh2, #Type of employment
+SDerwt0a, #Life situation currently
+SDetoed, #Main job in public. service
+SDft_pt, #Full or part time employment
+SDfuehr, #Recent activity primarily as a management supervisor
+SDfuehr2, #Activity primarily as a management supervisor
+SDhhincomez, #Monthly. (Imputed) HH net income into quintiles
+SDhvtypD, #Breadwinner in the household
+SDjobstat, #Professional status
+SDmainstat, #Employment (EHIS)
+SDses, #Socioeconomic status (SES)
+SEschwA_zz, #Pregnant at the time
+sex, #gender
+SFoslo1C, #Related parties
+SFoslo2C, #Participation of other persons
+SFoslo3A, #Getting Help
+SFosloA, #Social support (Oslo 3 Social Support Scale)
+SHhoer1, #hearing Aid
+SHhoer5, #Schwierigk. even with hearing aids: Quiet room
+SHhoer6, #Schwierigk. even with hearing aids: Loud room
+SHseh1, #Glasses or Contacts
+SHseh2C, #Difficulties even with glasses or contact lenses
+UVarbeit1, #Injury accident at work: I.d.l. 12 months (no way accident)
+UVarbeit2, #Injury accident at work: medicine. provided (no way accident)
+UVartfreiz, #Wg injury. Accident i.d.l. 12 months: Accident in leisure
+UVarthaus, #Wg injury. Accident i.d.l. 12 months: Accident at home
+UVartverkehr, #Wg injury. Accident i.d.l. 12 months: Traffic accident
+UVarztE_k #Medical care after an accident three Cat.
+))
+```
+
+#### Initially we want to set a baseline analysis of overall drivers for wellbeing crossing the entire population in Germany
+
+Ensure that the correct encoding (factor, numeric, ...) is applied according to the meta data from base dataset before for further feature enginering
+
+```{r right-coding of data types, echo=F}
+
+for (i in colnames(df_overall)){
+  
+  col_meta <- df_meta_lvls[df_meta_lvls$Varname == i,]
+  
+  col_type <- col_meta[1,]$Type
+  
+  if(nrow(col_meta) > 0){
+    
+    if (col_type == 'Nominal' |col_type == 'Ordinal' ){
+      
+      unique_lvls <- unique(df_geda_de[[i]])
+      
+      # for text columns, change data to factors 
+      
+      df_overall[[i]] <- factor(df_overall[[i]], levels=col_meta$numLevel, labels=col_meta$numLevel)
+      
+    }else if (col_type == "Scale"){
+      
+      unique_lvls <- unique(col_meta)
+      
+      for (row_it in 1:nrow(col_meta)){
+        
+        l <- col_meta[row_it,]$textLevel
+        
+        if (!is.na(l) & l != ""){
+        
+          df_overall[[i]][df_overall[[i]] == l] <- col_meta[col_meta$textLevel == l,]$numLevel
+          
+        }
+        
+      }
+      
+      # for scale columns, change datatype to numeric 
+      df_overall[[i]]<- as.numeric(df_overall[[i]])
+      
+    }
+      # add variable label, access this with Hmisc-functions like describe(%dataframe%)
+      
+      label(df_overall[[i]]) <- col_meta[1,]$VarLabel
+      
+      
+  }else{
+    print(paste(i, ": type: ", col_type))
+  }
+  
+}
+
+```
+
+## Feature engineering 
+Combine a new feature "how many portions do you eat vegies/fruit per day in a week?"
+People that have 4 to 6 portions of fruit per week have (coded = 2) on average 5 portions per week => 5 portions / 7 days in a week
+
+```{r}
+df_overall[df_overall$ENobstB == 2 & !is.na(df_overall$ENobstBz1),]$ENobstBz1 = round(5/7,2)
+df_overall[df_overall$ENobstB == 3 & !is.na(df_overall$ENobstBz1),]$ENobstBz1 = round(2/7,2)
+df_overall[df_overall$ENobstB == 4 & !is.na(df_overall$ENobstBz1),]$ENobstBz1 = round(1/7,2)
+df_overall[df_overall$ENobstB == 5 & !is.na(df_overall$ENobstBz1),]$ENobstBz1 = 0
+
+df_overall$ENobstBz1 <- as.numeric(df_overall$ENobstBz1)
+
+# deselect the question 
+df_overall<- df_overall %>% dplyr::select(-ENobstB)
+```
+
+Do the same with veggies.
+people that have 4 to 6 portions of vegies per week have (coded = 2) on average 5 portions per week => 5 portions / 7 days in a week
+
+```{r}
+df_overall[df_overall$ENgemB == 2 & !is.na(df_overall$ENgemBz1),]$ENgemBz1 = round(5/7,2)
+df_overall[df_overall$ENgemB == 3 & !is.na(df_overall$ENgemBz1),]$ENgemBz1 = round(2/7,2)
+df_overall[df_overall$ENgemB == 4 & !is.na(df_overall$ENgemBz1),]$ENgemBz1 = round(1/7,2)
+df_overall[df_overall$ENgemB == 5 & !is.na(df_overall$ENgemBz1),]$ENgemBz1 = 0
+
+df_overall$ENgemBz1 <- as.numeric(df_overall$ENgemBz1)
+
+# deselect the question 
+df_overall<- df_overall %>% dplyr::select(-ENgemB)
+```
+
+Aggregate types of schools within German school system
+
+```{r}
+df_overall[(df_overall$SDbild1D == 8 | df_overall$SDbild1D == 1 | df_overall$SDbild1D == 2 | df_overall$SDbild1D == 3) & !is.na(df_overall$SDbild1D),]$SDbild1D <- 2
+df_overall[(df_overall$SDbild1D == 3 | df_overall$SDbild1D == 4 | df_overall$SDbild1D == 5) & !is.na(df_overall$SDbild1D) ,]$SDbild1D <- 5
+df_overall[(df_overall$SDbild1D == 6 | df_overall$SDbild1D == 7) & !is.na(df_overall$SDbild1D) ,]$SDbild1D <- 7
+
+df_overall$SDbild1D <- drop.levels(df_overall$SDbild1D)
+
+```
+
+Encode minutes of sports during week as integer (1 unit == 30 minutes); -96 == no sport == 0 minutes
+
+```{r}
+df_overall[df_overall$KAspodauC_k == '-96' & !is.na(df_overall$KAspodauC_k),]$KAspodauC_k <- 0
+
+df_overall$KAspodauC_k <- as.numeric(df_overall$KAspodauC_k)
+
+```
+
+Encode days mnissed due to sickness in numeric values (1 == 1 week == 7 days missed due to sickness)
+
+```{r}
+df_overall$AUarbzD_k <- as.numeric(df_overall$AUarbzD_k)
+```
+
+Set NA to values where people are not being asked about tetanus vaccinations
+
+```{r}
+df_overall[(df_overall$IPtet_lz == '-96' | df_overall$IPtet_lz == '-95' ) & !is.na(df_overall$IPtet_lz),]$IPtet_lz <- NA
+```
+
+Encode number of GP visited in the last 4 weeks --> if -96, then 0 
+
+```{r}
+df_overall[df_overall$IAarzt1B4w == '-96' & !is.na(df_overall$IAarzt1B4w),]$IAarzt1B4w <- 0
+
+df_overall$IAarzt1B4w <- as.numeric(df_overall$IAarzt1B4w)
+```
+
+Encode number of GP visited in the last 12 months --> if -96, then 0 (added on 4/1 by AA)
+
+```{r}
+df_overall$IAarzt1B <- as.numeric(df_overall$IAarzt1B)
+
+#subtract 1 given it updates the values in the original data set (Added 4.1.20)
+df_overall$IAarzt1B <- df_overall$IAarzt1B -1
+
+# if 1 = 1, all else = 0 (represent if you have visited doctor in the last 12 months) (added 4.1.20)
+df_overall$IAarzt1B[df_overall$IAarzt1B == 1] <- 0
+df_overall$IAarzt1B[df_overall$IAarzt1B >= 2] <- 1
+
+```
+
+
+Set NA to values where people left values blank for SDbild4C (Highest berufl. Training or university / college degree) and SDbverh2 (Type of employment)
+
+```{r}
+#df_overall$SDbild4C[df_overall$SDbild4C >= "-96"] <- NA #ADDED 4.1.20
+#df_overall$SDbverh2[df_overall$SDbverh2 >= "-96"] <- NA #ADDED 4.1.20
+```
+
+
+
+Encode number of specialist visited in the last 12 months --> if -96, then 0 
+
+```{r}
+df_overall[df_overall$IAfa4w == '-96' & !is.na(df_overall$IAfa4w),]$IAfa4w <- 0
+
+df_overall$IAfa4w <- as.numeric(df_overall$IAfa4w)
+```
+
+Encode IAkhs_k as numeric where 1 unit == 7 days == 1 week spent in hospital 
+
+```{r}
+df_overall$IAkhs_k <- as.numeric(df_overall$IAkhs_k)
+```
+
+Encode if the individual has had any injuries due to an accident in the past 12 months
+
+```{r}
+df_overall$flagHadAccident <-  ifelse( is.na(df_overall$UVartverkehr) & is.na(df_overall$UVarthaus) & is.na(df_overall$UVartfreiz) & is.na(df_overall$UVarbeit1), NA, 
+        
+        ifelse(df_overall$UVartverkehr == 1 | df_overall$UVarthaus == 1 |df_overall$UVartfreiz == 1 |df_overall$UVarbeit1 == 1 , 
+1,0))
+
+df_overall$flagHadAccident <- factor(df_overall$flagHadAccident)
+```
+
+
+##### Ensuring that response is an ordered factor
+
+```{r}
+col_meta <- df_meta_lvls[df_meta_lvls$Varname == 'GZmehm1',]
+
+df_overall$GZmehm1 <- ordered(df_overall$GZmehm1, levels=col_meta[order(col_meta$numLevel),]$numLevel, labels=col_meta[order(col_meta$numLevel),]$numLevel)
+
+describe(df_overall$GZmehm1)
+```
+
+## Feature selection:
+
+Out of all the possible columns - select the functioanlly relevant ones, drop too granular ones and include the newly engineered features for modelling.
+As of now, factors that are purely relevant for one sex (e.g. pregnancy) are not included.
+
+Thus, variables of the following six blocks are included: 
+
+* master data about the person
+* socio economic data
+* way of life
+* health care 
+* health situation and conditions
+* psychological health
+
+```{r}
+curr_cols <- c(
+  
+  # step 1: master data
+  'sex', #Geschlecht
+  "age5B", #Alter (5-Jahres-Gruppen)
+  "MIbirthplace", #Geburtsland (EHIS)
+  "MIcitizen", #Staatsangehörigkeit
+  "bula", #Bundesland
+  "PAgroe", #Körpergröße (Selbstangabe) [cm]
+  "PAgewiB", #Körpergewicht (Selbstangabe) [kg]
+  "IAkv1D", #Krankenversicherung in 3 Kat.
+  
+  # step 2: socio economic data
+  "SDaeqeink_k", #Äquivalenzeinkommen (imputiert,kat) [€]
+  "SDbild4C", #Höchster berufl. Ausbildungs- oder Hochschul/Fachhochschulabschluss
+  "SDbverh2", #Art des Beschäftigungsverhältnisses
+  "SDhvtypD", #Hauptverdiener im Haushalt
+  "SDmainstat", # Erwerbstätigkeit
+  "SDalo", #Arbeitslos i.d.l. 5 Jahren, 
+  "PAhhtype", #Haushaltstyp
+  
+  # step 3: way of life
+  "ENobstBz1",  #Verzehr von Obst: pro Tag
+  "ENgemBz1", #Verzehr von Gemüse: pro Tag
+  "AKoft12_k", #Alkohol i.d.l. 12 Mon. in 6 Kat.
+  "RCstat",  # Smoking
+  "KAehispaq2", #Bewegung zu Fuß: Tage pro Woche
+  "KAehispaq4", #Bewegung mit Fahrrad: Tage pro Woche
+  "KAspodauC_k", #Sport pro Woche insgesamt (in 30 min kategoriesiert)
+  "KAehispaq8", #Aufbau/Kräftigung: Tage pro Woche
+  "KAgfka", #Einhalt. aerobe WHO-Bew.empf. (mit Gehen >= 150 Min. aerobe körp. Aktiv./Wo)
+  "KAgfa", #>= 150 min Ausdaueraktiv.und 2 x/ Woche Aktiv. zur Muskelkräft.(Einhalt. beider WHO-Empf.)
+  "KAgfka1", #Einhalt. aerobe WHO-Bew.empf. (o. Gehen >= 150 Min. aerobe körp. Aktiv./Wo)
+  "KAgfmk", #WHO-Empf. zur Muskelkräft. (>= 2x/Wo. Aktivit. zur Muskelkräftigung)
+  
+  # step 4: health care
+  "IPinfl4", #Letzte Grippeimpfung
+  "IPinfl6B", #Häufigkeit Grippeimpfung, generiert
+  "IPtet_lz", #las tetanus vaccination --> flag cannot be used since there are only "YES" tetanus vaccinated people
+  "AMarztB", #Einnahme Medikamente v. Arzt verschrieben i.d.l. 2 Wo
+  "AMfrei", #Einnahme Medikamente nicht v. Arzt verschrieben i.d.l. 2 Wo
+  "AUarbzD_k", #Krankheitsbedingt nicht zur Arbeit: Wochen
+  "IAhypus", #Letzte Blutdruckmessung
+  "IAcholus", #Letzte Blutfettwertebestimmung
+  "IAdiabus", #Letzte Blutzuckermessung
+  "IAkfutyp2B_lz", #Letzter Stuhltest
+  "IAkfutyp4B_lz", #Letzte Darmspiegelung
+  # exclude as of now, since only relevant for women: IAkfutyp7B_lz, #Letzte Mammografie
+  # exclude as of now, since only relevant for women: IAkfutyp7Bgr, #Grund für die letzte Mammografie
+  # exclude as of now, since only relevant for women: IAkfutyp5B_lz, #Letzter Gebärmutterhalsabstrich
+  "IAtermin", #Auf Untersuchungstermin gewartet i.d.l. 12 Mon.
+  "IAweg", #Untersuchung verzögert wegen Entfernung i.d.l. 12 Mon.
+  # IAkosten1, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: Ärztl. US/Behandlung
+  # IAkosten2, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: Zahnärztl. US/Behandlung
+  # IAkosten3, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: Verordnete Med.
+  # IAkosten4, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: US/Behandlung psy. Prob.
+  "IAarzt14B", #Zahnmedizinische Untersuchung
+  "IAarzt1B4w", #Besuch Allgemeinarzt oder Hausarzt i.d.l. 4 Wochen: Anzahl
+  "IAarzt1B", #Visit doctor in the last 12 months (Added on April 1st, part of causal analysis)
+  "IAfa4w", #Besuch Facharzt i.d.l. 4 Wochen: Anzahl
+  "IAarzt8C", #Besuch Psychologen i.d.l. 12 Mon.
+  "IAkhs", #Stationär im Krankenhaus i.d.l. 12 Mon.
+  "IAkhs_k", #Stationär im Krankenhaus i.d.l. 12 Mon.: Anzahl der Nächte (kat) --> encoded in # of weeks
+  "IAther2B", #Besuch Physiotherapeuten i.d.l. 12 Mon
+  "IApflege", #Inanspruchnahme häuslicher Pflegedienst: I.d.l. 12 Mon.
+  
+  # step 5: health conditions
+  # exclude as of now, since only relevant for women: "SEschwA_zz", #Schwanger zur Zeit
+  "GZmehm3C", #Chronische Krankheiten
+  "GZmehm2D", #Einschränkung durch Krankheit seit mind. 6 Monaten
+  "BBbehB", #Amtlich anerkannte Behinderung 
+  "GZsubj1", #Achten auf Gesundheit
+  "SHseh1", #Brille oder Kontaktlinsen
+  "SHhoer1", #Hörgerät
+  "LQsf367C", #Stärke Schmerzen i.d.l. 4 Wochen
+  "LQsf368C", #Behinderung in Alltagstätigkeiten durch Schmerzen i.d.l. 4 Wochen
+  "flagHadAccident" , # has had any injuries due to accidents in past 12 months
+  "BBdors112", #Beschwerden unterer Rücken: I.d.l.12 Mon.
+  "BBdors212", #Beschwerden Nacken, Halswirbelsäule: I.d.l.12 Mon.
+  "BBblas12B", #Harninkontinenz: I.d.l.12 Mon.
+  "BBgehen", #Schwierigk. beim Laufen ohne Gehhilfe auf 500m
+  "BBtreppe", #Schwierigk. Treppe mit 12 Stufen
+  "BBmyo12", #Chronische Beschwerden nach Herzinfarkt: I.d.l.12 Mon.
+  "BBsa12", #Chronische Beschw. infolge eines Schlaganfalls: I.d.l.12 Mon.
+  "KHhyp12", #Bluthochdruck: I.d.l.12 Mon.
+  "KHhyp", #Bluthochdruck: Jemals ärztlich diagnostiziert
+  "KHhyp12pB", #Indikator bek. (ärztl. diagn.) Bluthochdruckdruck i.d.l. 12 Mon
+  "KHhypmedC", #Indikator blutdrucksenkende Mittel bei bekannter Hypertonie
+  "KHmyo12", #Herzinfarkt: I.d.l. 12 Mon.
+  "KHkhk12", #Koronare Herzerkrankung/Angina Pectoris: I.d.l.12 Mon.
+  "KHbbmyo12", #Herzinfarkt/chron. Beschw.: I.d.l. 12 Mon.
+  "KHhi12", #Herzinsuffizienz: I.d.l.12 Mon.
+  "KHsa12", #Schlaganfall: I.d.l.12 Mon.
+  "KHdiabB12", #Diabetes: I.d.l.12 Mon.
+  "KHab12", #Asthma: I.d.l.12 Mon.
+  "KHkarz12", #Krebserkrankung: I.d.l.12 Mon.
+  "KHlip12A", #Erhöhte Blutfette/Chol.: I.d.l.12 Mon.
+  "KHlipA", #Jemals erhöhte Blutfette/Cholesterinw. (Arztdiagnose)
+  "KHlipmedA", #Erhöhtes Cholesterin: Zurzeit Medikamenteneinnahme
+  "KHcb12", #Chronische Bronchitis: I.d.l.12 Mon.
+  "KHulc12", #Magen- oder Zwölffingerdarmgeschwür: I.d.l.12 Mon.
+  "KHced12", #Chronisch entzündliche Darmerkrankung: I.d.l.12 Mon.
+  "KHlz12", #Leberzirrhose: I.d.l.12 Mon.
+  "KHcle12", #Andere chronische Lebererkrankungen: I.d.l.12 Mon.
+  "KHniB12", #Chron. Nierenprobleme: I.d.l.12 Mon.
+  "KHdge12", #Arthrose: I.d.l.12 Mon.
+  "KHra12", #Arthritis: I.d.l.12 Mon.
+  "KHos12", #Osteoporose: I.d.l.12 Mon.
+  "KHalgi112", #Allergien: I.d.l. 12 Mon.
+
+  # step 6: psychological health
+  "LQzufrB10", #Zufriedenheit: Leben insgesamt
+  "PKdep12", #Depression: I.d.l. 12 Mon.
+  "SFoslo1C", #Nahestehende Personen
+  "SFoslo3A", #Erhalt von Hilfe
+  "SFosloA" #Soziale Unterstützung (Oslo-3 Social Support Scale)
+)
+
+curr_cols_all <- append(curr_cols, "GZmehm1")
+
+```
+
+Preparing the data for modelling: 
+* selection of relevant columns
+* dropping superfluous levels
+* removing NAs
+* creating training/test spit for performance evaluation
+
+
+```{r}
+df_tmp <- df_overall %>% dplyr::select(curr_cols_all) 
+df_tmp <- df_tmp[complete.cases(df_tmp),]
+for (c in colnames(df_tmp)){
+  df_tmp[[c]] <- drop.levels(df_tmp[[c]])
+}
+df_tmp <- df_tmp[complete.cases(df_tmp),]
+```
+
+## Testing for multicollinearity
+
+It seems that the following variables suggest multicollinearity and thus are omitted:
+
+```{r, echo=False}
+options(scipen=999)
+lm <- lm(GZmehm1 ~ ., data = (df_tmp %>% dplyr::mutate_all(as.character) %>% dplyr::mutate_all(as.numeric)))
+variance_factors <- vif(lm)
+variance_factors[variance_factors>9]
+```
+
+Additional checks on multicollinearity validate the removal of the variables selected in the prior step
+```{r}
+#Test Multicollinearity after the removal of all of the variables with high VIF: KHhyp12pB & KHbbmyo12
+#Results: None
+df_test1 <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
+lm_test1 <- lm(GZmehm1 ~ ., data = (df_test1 %>% dplyr::mutate_all(as.character) %>% dplyr::mutate_all(as.numeric)))
+variance_factors_test1 <- vif(lm_test1)
+variance_factors_test1[variance_factors_test1>9]
+
+
+#Test Multicollinearity after the removal of one of the variables with high VIF: KHhyp12pB
+#Results: As expected, KHbbmyo12 came up with high multicol.
+df_test2 <- df_tmp %>% dplyr::select(-c(KHhyp12pB))
+lm_test2 <- lm(GZmehm1 ~ ., data = (df_test2 %>% dplyr::mutate_all(as.character) %>% dplyr::mutate_all(as.numeric)))
+variance_factors_test2 <- vif(lm_test2)
+variance_factors_test2[variance_factors_test2>9]
+
+
+#Test Multicollinearity after the removal of one of the variables with high VIF: KHhyp12pB
+#Results: As expected, KHhyp12pB came up with high multicol.
+df_test3 <- df_tmp %>% dplyr::select(-c(KHbbmyo12))
+lm_test3 <- lm(GZmehm1 ~ ., data = (df_test3 %>% dplyr::mutate_all(as.character) %>% dplyr::mutate_all(as.numeric)))
+variance_factors_test3 <- vif(lm_test3)
+variance_factors_test3[variance_factors_test3>9]
+```
+
+
+Our goal here is to run separate binary logistic regressions for different levels of the target variable (4 regressions if you have 5 levels), and see that the slopes are similar in all 4. The intercepts can be very different, that is consistent with the proportional odds model.
+```{r}
+#Check Parellel Slopes Assumption Holds
+#psa = parallel slopes assumption
+
+#health = 1
+df_psa1 <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
+df_psa1$GZmehm1 <- as.numeric(df_psa1$GZmehm1)
+df_psa1$GZmehm1[df_psa1$GZmehm1 > 1] <- 0
+logit_1 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa1)
+
+#health <= 2
+df_psa2 <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
+df_psa2$GZmehm1 <- as.numeric(df_psa2$GZmehm1)
+df_psa2$GZmehm1[df_psa2$GZmehm1 <= 2] <- 1
+df_psa2$GZmehm1[df_psa2$GZmehm1 > 2] <- 0
+logit_2 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa2)
+
+#health <= 3
+df_psa3 <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
+df_psa3$GZmehm1 <- as.numeric(df_psa3$GZmehm1)
+df_psa3$GZmehm1[df_psa3$GZmehm1 <= 3] <- 1
+df_psa3$GZmehm1[df_psa3$GZmehm1 > 3] <- 0
+logit_3 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa3)
+
+#health <= 4
+df_psa4 <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
+df_psa4$GZmehm1 <- as.numeric(df_psa2$GZmehm1)
+df_psa4$GZmehm1[df_psa4$GZmehm1 <= 4] <- 1
+df_psa4$GZmehm1[df_psa4$GZmehm1 > 4] <- 0
+logit_4 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa4)
+
+#Summary Statistics
+#summary(logit_1)
+#summary(logit_2)
+#summary(logit_3)
+#summary(logit_4)
+```
+
+```{r}
+
+df_base <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
+
+trainingRows <- sample(1:nrow(df_base), 0.8 * nrow(df_base))
+trainingData <- df_tmp[trainingRows, ]
+testData <- df_tmp[-trainingRows, ]
+```
+
+```{r, echo=F, eval=F}
+df_base_char <- df_base
+for (i in colnames(df_base_char)){
+  
+  col_meta <- df_meta_lvls[df_meta_lvls$Varname == i,]
+  
+  col_type <- col_meta[1,]$Type
+  
+  if (i != "GZmehm1"){
+     if(nrow(col_meta) > 0){
+      # print(paste(i, col_type))
+      
+      
+      if (col_type == "Scale" | col_type == "Ordinal"){
+        # print(i)
+        df_base_char[[i]] <- as.numeric(as.character(df_base_char[[i]]))
+      }else{
+        df_base_char[[i]] <- paste0("_", as.character(df_base_char[[i]]))
+      }
+  
+    }else{
+      df_base_char[[i]] <- as.numeric((df_base_char[[i]]))
+    }
+  }
+  
+}
+```
+
+```{r, echo=F, eval=F}
+write.csv(df_base, "df_base_numeric.csv", row.names=FALSE)
+write.csv(df_base_char, "df_base_char.csv", row.names=FALSE)
+```
+
+Causal Analysis: Propensity Score Matching
+```{r}
+#psm = propensity score matching
+psm_model <- glm(IAarzt1B ~ .,family = binomial (link = "probit"), data = df_base)
+
+#Using this model, we can now calculate the propensity score for each person. It is simply the student’s predicted probability of being Treated, given the estimates from the logit model. Below, I calculate this propensity score using predict() and create a dataframe that has the propensity score as well as the student’s actual treatment status.
+psm_df <- data.frame(predict_score = predict(psm_model, type = "response"),
+                     treated = psm_model$model$IAarzt1B)
+
+```
+
+Examining the region of common support
+```{r}
+labs <- paste("Visit general practitioner in LTM:", c("NO", "YES"))
+psm_df %>%
+  mutate(treated = ifelse(treated == 1, labs[1], labs[2])) %>%
+  ggplot(aes(x = predict_score)) +
+  geom_histogram(color = "white") +
+  facet_wrap(~treated) +
+  xlab("Propensity Score (Prob. of NOT having visited GP in LTM)") +
+  theme_bw()
+```
+
+Executing a matching algorithm
+
+Find pairs of observations that have very similar propensity scores, but that differ in their treatment status. matchit package estimates the propensity score then matches observations based on the method of choice (“nearest” in this case).
+
+```{r}
+
+dim(df_base)
+
+set.seed(100)
+mod_match <- matchit(IAarzt1B ~ 
+                            
+                            sex + age5B + MIbirthplace + MIcitizen + bula + PAgroe + PAgewiB + IAkv1D + SDaeqeink_k + SDbild4C + SDbverh2 + SDhvtypD + SDmainstat + SDalo + PAhhtype + ENobstBz1 + ENgemBz1 + AKoft12_k + RCstat + KAehispaq2 + KAehispaq4 + KAspodauC_k + KAehispaq8 + KAgfka + KAgfa + KAgfka1 + KAgfmk + IPinfl4 + IPinfl6B + IPtet_lz + AMarztB + AMfrei + AUarbzD_k + IAhypus + IAcholus + IAdiabus + IAkfutyp2B_lz + IAkfutyp4B_lz + IAtermin + IAweg + IAarzt14B + IAarzt1B4w + IAfa4w + IAarzt8C + IAkhs + IAkhs_k + IAther2B + IApflege + GZmehm3C + GZmehm2D + BBbehB + GZsubj1 + SHseh1 + SHhoer1 + LQsf367C + LQsf368C + flagHadAccident + BBdors112 + BBdors212 + BBblas12B + BBgehen + BBtreppe + BBmyo12 + BBsa12 + KHhyp12 + KHhyp + KHhypmedC + KHmyo12 + KHkhk12 + KHhi12 + KHsa12 + KHdiabB12 + KHab12 + KHkarz12 + KHlip12A + KHlipA + KHlipmedA + KHcb12 + KHulc12 + KHced12 + KHlz12 + KHcle12 + KHniB12 + KHdge12 + KHra12 + KHos12 + KHalgi112 + LQzufrB10 + PKdep12 + SFoslo1C + SFoslo3A + SFosloA + GZmehm1
+                            , data = df_base, method = "nearest", replace = FALSE, caliper = 0.2)
+
+```
+
+To create a dataframe containing only the matched observations
+```{r}
+dta_m <- match.data(mod_match)
+dim(dta_m)
+
+```
+
+Examining covariate balance in the matched sample
+We’ll check difference in means for a handful of variables to assess covariate balance in the matched sample:
+
+Difference in Means
+```{r}
+dta_m_numeric <- dta_m #making a new df in order to conver variables to numeric
+
+#Picked 5 variables, including wellbeing to confirm the means were close to each other
+dta_m_numeric$sex <- as.numeric(dta_m_numeric$sex)
+dta_m_numeric$GZmehm1 <- as.numeric(dta_m_numeric$GZmehm1)
+dta_m_numeric$RCstat <- as.numeric(dta_m_numeric$RCstat)
+dta_m_numeric$bula <- as.numeric(dta_m_numeric$bula)
+dta_m_numeric$PAhhtype <- as.numeric(dta_m_numeric$PAhhtype)
+
+
+mean_check_var <- c("sex","GZmehm1","RCstat","bula","PAhhtype")
+
+#Checking to see the means are close to each other
+dta_m_numeric %>%
+  group_by(IAarzt1B) %>% 
+  dplyr :: select(one_of(mean_check_var)) %>%
+  summarise_all(funs(mean)) %>%
+  kable() %>%
+  kable_styling()
+```
+
+Estimating treatment effects
+```{r}
+
+with(dta_m_numeric, t.test(GZmehm1 ~IAarzt1B ))
+
+psm_results <- polr(GZmehm1 ~ 
+                      IAarzt1B+ sex + age5B + MIbirthplace + MIcitizen + bula + PAgroe + PAgewiB + IAkv1D + SDaeqeink_k + SDbild4C + SDbverh2 + SDhvtypD + SDmainstat + SDalo+ PAhhtype + AKoft12_k + RCstat + KAehispaq2 + KAspodauC_k + KAehispaq8
+                      , data = dta_m)
+
+#Excluded: given the consistent errors received as a result of using the polr function in R and the marginal impact of IAarzt1B on GZmehm1, we excluded the below variables
+
+#GZmehm2D + LQsf367C + BBgehen + BBtreppe + KHhyp + KHhypmedC + KHkhk12 + KHhi12 + KHkarz12 + KHlip12A + KHulc12 + KHced12 + KHos12 + KHalgi112 + LQzufrB10 + PKdep12 + SFoslo1C + SFoslo3A               
+
+#+ KAgfka + KAgfa + KAgfka1 + KAgfmk + IPinfl4 + IPinfl6B + IPtet_lz + AMarztB + AMfrei + AUarbzD_k + IAhypus + IAcholus + IAdiabus + IAkfutyp2B_lz + IAkfutyp4B_lz + IAtermin + IAweg + IAarzt14B + IAarzt8C + IAkhs + IAther2B + IApflege + GZmehm3C + BBbehB+ GZsubj1+ SHseh1 + SHhoer1+ KHlipA + BBmyo12 +BBsa12+KHhyp12 + KHmyo12+KHsa12+ KHdiabB12+ KHab12+ KHlipmedA+ KHcb12+ KHlz12+ KHcle12 + KHniB12+ KHdge12+ KHra12         
+summary(psm_results)
+```
+
+## Model selection
+
+[Please refer to python flow for model selection.]
+
+## Ordered logistic regression
+
+Model fitting:
+```{r, echo=F}
+m <- polr(GZmehm1 ~ ., data = trainingData, Hess=TRUE)
+summary(m)
+```
+
+The goal here would be to create a table that demonstrates the similarities and/or diff in the statistically significant variables we found while subsetting the data
+
+Questions: Should we subset on smoking?
+
+Subsetting: Sex = 1
+```{r, echo=F}
+trainingData_sex1 <- subset(trainingData,trainingData$sex == 1)
+m_sex1 <- polr(GZmehm1 ~ ., data = trainingData_sex1, Hess=TRUE)
+summary(m_sex1)
+
+df_model_sum <- as.data.frame(coef(summary(m_sex1)))
+
+## calculate and store p values
+df_model_sum$p <- pnorm(abs(df_model_sum$`t value`), lower.tail = FALSE) * 2
+
+df_model_sum$sig_col <- ifelse(df_model_sum$p < 0.001,'***',ifelse(df_model_sum$p < 0.01,'**',
+                     ifelse(df_model_sum$p < 0.05,'*',
+                            ifelse(df_model_sum$p < 0.1,'.', ''
+                     ))))
+
+
+df_model_sum$logodds <- format(exp(df_model_sum$Value), trim = TRUE, digits = 3, scientific = F)
+
+df_meta_lvls$coeff_label <- paste0(df_meta_lvls$Varname,df_meta_lvls$numLevel)
+df_model_sum <- setDT(df_model_sum, keep.rownames = TRUE)[]
+df_model_sum <- df_model_sum %>% dplyr::rename(coeff_label = rn)
+df_model_sum <- df_model_sum %>% left_join((df_meta_lvls %>% dplyr::select(c(coeff_label, ThemeEn, Varname, VarLabelEn, textLabelEn))), by="coeff_label")
+
+df_model_sum %>% 
+  kable() %>%
+  kable_styling()
+```
+
+
+```{r}
+# stargazer(m, type="html", covariate.labels=c(""), out="models.htm")
+```
+
+
+Evaluating the model and interpreting the coefficients. 
+For this:
+
+* p-values are calculated based on the t-values as well as the significance level
+* the logodds are calculated by exp({VALUE-OF-THE-COEFFICIENT})
+* the coefficients are joint with the meta data to ease interpretation
+
+```{r}
+
+df_model_sum <- as.data.frame(coef(summary(m)))
+
+## calculate and store p values
+df_model_sum$p <- pnorm(abs(df_model_sum$`t value`), lower.tail = FALSE) * 2
+
+df_model_sum$sig_col <- ifelse(df_model_sum$p < 0.001,'***',ifelse(df_model_sum$p < 0.01,'**',
+                     ifelse(df_model_sum$p < 0.05,'*',
+                            ifelse(df_model_sum$p < 0.1,'.', ''
+                     ))))
+
+
+df_model_sum$logodds <- format(exp(df_model_sum$Value), trim = TRUE, digits = 3, scientific = F)
+
+df_meta_lvls$coeff_label <- paste0(df_meta_lvls$Varname,df_meta_lvls$numLevel)
+df_model_sum <- setDT(df_model_sum, keep.rownames = TRUE)[]
+df_model_sum <- df_model_sum %>% dplyr::rename(coeff_label = rn)
+df_model_sum <- df_model_sum %>% left_join((df_meta_lvls %>% dplyr::select(c(coeff_label, ThemeEn, Varname, VarLabelEn, textLabelEn))), by="coeff_label")
+
+df_model_sum %>% 
+  kable() %>%
+  kable_styling()
+```
+
+### Interpretation
+
+According to the ordered logitstic regression, the exponentiated coefficients can be interpreted as the percent-effect (logodds) for the next higher class in the response. In this case the following examples illustrate: 
+
+##### Example 1: bula9 --> Classifies participants from Bavaria
+Bula is encoded as the national state with 16 variables.
+
+```{r, echo=F}
+describe(df_overall$bula)
+```
+
+bula9 coefficient results:
+
+```{r, echo=F}
+df_model_sum[df_model_sum$coeff_label=='bula9',] %>% 
+  kable() %>%
+  kable_styling()
+```
+
+Thus, the chances of rating higher on positive wellbeing are 36.2% higher when living in Bavaria as compared to other states. With a low p-value of < 0.001 this is a significant impact driver.
+
+##### Example 1: ENobstBz1 --> Classifies the # of portions of fruit consumed within a week
+
+```{r, echo=F}
+describe(df_overall$ENobstBz1)
+```
+
+```{r, echo=F}
+df_model_sum[df_model_sum$coeff_label=='ENobstBz1',] %>% dplyr::select(-c(ThemeEn, Varname, VarLabelEn)) %>%
+  kable() %>%
+  kable_styling()
+```
+
+Increasing the portion of fruit consumption / week by 1 unit increases the chance of rating happier by 4,1%. This is statistically significant with a low p-value of 0.044.
+
+### Model evaluation of ordered logit:
+
+For model evaluation of the ordered logit, the predictions shall be evaluated on test data (20% of overall data - OOB error). 
+
+#### Confusion matrix
+The model performance indicates an overall accuracy of ~68% with reasonable performance throughout all classes except for the rating == 2. It seems that model / particiapnts show no clear distinction between a very bad rating and a bad rating and a bad and mediocre rating as the confusion amongst those combinations is high (-> Sensitivity is very low for these classes).
+
+However, the balanced accuracy overall seems to indicate a reasonable model for estimating the wellbeing score of individuals.
+
+```{r testdata ordered logit, echo=F}
+options(scipen=3)
+predictedClass <- predict(m, testData) 
+confusionMatrix(predictedClass, testData$GZmehm1)
+```
+
+```{r, Exec. Summary: Results Table, echo = F}
+library(data.table)
+
+
+df_model_sum_test <- df_model_sum
+df_model_sum_test$sig_col[df_model_sum_test$sig_col == ""] <- "not.sig."
+
+sig_table <- table(df_model_sum_test$VarLabelEn, df_model_sum_test$sig_col)
+sig_table <- cbind(sig_table, Total = rowSums(sig_table))
+sig_table <- as.data.frame.matrix(sig_table)
+#convert the row name to a column of the df
+#add column name
+sig_table <- setDT(sig_table, keep.rownames = TRUE)[]
+colnames(sig_table)[1] <- "VarLabelEn"
+
+#create a variable that measures the importance
+sig_table$importance <- (sig_table[,7]-sig_table[,6])/sig_table[,7]
+
+
+## thoughts: create the actionable list of variables as a list in R therefore it is easy to reference and adjust
+actionable <- data.frame(VarLabelEn = c(
+'state',
+'Type of employment',
+'Alcohol i.d.l. 12 months in 6 Cat.',
+'Smoke',
+'Stop. aerobic WHO Bew.empf. (With Go> = 150 min. Aerobic körp. Aktiv./Wo)',
+'> = 150 min Ausdaueraktiv.und 2x / week Active. for Muskelkräft. (stop. WHO both Sens.)',
+'Stop. aerobic WHO Bew.empf. (O. Go> = 150 aerobic körp. Aktiv./Wo min.)',
+'WHO Rec. to Muskelkräft. (> = 2x / wk. Activities. To strengthen the muscles)',
+'Frequency flu vaccine generated','Dental examination',
+'Visit psychologists i.d.l. 12 Mon.',
+'Visit physiotherapists i.d.l. 12 Mon',
+'Use of home care services: I.d.l. 12 Mon.',
+'Social support (Oslo 3 Social Support Scale)'))
+
+actionable$Actionable <- "Y"
+
+#Join the "Actionable" flag (refer to above df)
+sig_table <- left_join(sig_table,actionable)
+
+#Join the Themes associated with the Variable Names
+sig_table <- left_join(sig_table,unique(dplyr::select(df_model_sum,VarLabelEn,ThemeEn)))
+
+#subset the list of variables to actionable ones
+subset_actionable <- subset(sig_table, Actionable == "Y")
+#create a table that orders based on importance & actionable
+table_subset_actionable <- subset_actionable[order(-subset_actionable$importance),]
+
+#create a table that orders just based on importance
+subset_importance <- subset(sig_table,importance > 0)
+table_subset_importance <-subset_importance[order(-subset_importance$importance),]
+
+
+#Printing of the relevant tables
+table_subset_actionable %>% kable() %>% kable_styling()
+
+table_subset_importance %>% kable() %>% kable_styling()
+
+```
+
+```{r Appendix: Subset of table by Theme, echo = FALSE}
+
+#for the appendix of the presentation. Include a table by Theme.
+#unique_themes <- unique(sig_table$ThemeEn)
+
+#for (i in unique_themes){
+  
+  #theme_subset <- subset(sig_table, ThemeEn == i)
+  #table <- theme_subset[order(-theme_subset$importance),]
+  #kable(table) %>% kable_styling()
+  
+#}
+
+#Diseases
+theme_diseases <- subset(sig_table, ThemeEn == "Diseases (1101)")
+theme_diseases[order(-theme_diseases$importance),] %>% kable() %>% kable_styling()
+
+#Age and Gender
+theme_age_gender <- subset(sig_table, ThemeEn == "Age and gender (1701)")
+theme_age_gender[order(-theme_age_gender$importance),] %>% kable() %>% kable_styling()
+
+#physical activity
+theme_phy_act <- subset(sig_table, ThemeEn == "Physical Activity (1501)")
+theme_phy_act[order(-theme_phy_act$importance),] %>% kable() %>% kable_styling()
+
+#Alcohol
+theme_alcohol <- subset(sig_table, ThemeEn == "Alcohol (1504)")
+theme_alcohol[order(-theme_alcohol$importance),] %>% kable() %>% kable_styling()
+
+#Sociodemographic
+theme_sociodem <- subset(sig_table, ThemeEn == "Sociodemography (1704)")
+theme_sociodem[order(-theme_sociodem$importance),] %>% kable() %>% kable_styling()
+
+#Health
+theme_health <- subset(sig_table, ThemeEn == "Health (1102)")
+theme_health[order(-theme_health$importance),] %>% kable() %>% kable_styling()
+
+#Disability
+theme_disability <- subset(sig_table, ThemeEn == "Func. Beeinträcht, and complaints. Disability (1105)")
+theme_disability[order(-theme_disability$importance),] %>% kable() %>% kable_styling()
+
+#Migration Status
+theme_migration <- subset(sig_table, ThemeEn == "Migration Status (1705)")
+theme_migration[order(-theme_migration$importance),] %>% kable() %>% kable_styling()
+
+#Use
+theme_use <- subset(sig_table, ThemeEn == "Use (1401)")
+theme_use[order(-theme_use$importance),] %>% kable() %>% kable_styling()
+
+#Mental
+theme_mental <- subset(sig_table, ThemeEn == "Mental Krankh./Auffälligkeiten (1301)")
+theme_mental[order(-theme_mental$importance),] %>% kable() %>% kable_styling()
+
+#QoL
+theme_qol <- subset(sig_table, ThemeEn == "Quality of Life (1109)")
+theme_qol[order(-theme_qol$importance),] %>% kable() %>% kable_styling()
+
+#Vaccine
+theme_vacc <- subset(sig_table, ThemeEn == "Vaccinations (1402)")
+theme_vacc[order(-theme_vacc$importance),] %>% kable() %>% kable_styling()
+
+#protection factors
+theme_protection <- subset(sig_table, ThemeEn == "Protection factors (1303)")
+theme_protection[order(-theme_protection$importance),] %>% kable() %>% kable_styling()
+
+#See and Hear
+theme_see_hear <- subset(sig_table, ThemeEn == "Seeing and hearing (1104)")
+theme_see_hear[order(-theme_see_hear$importance),] %>% kable() %>% kable_styling()
+
+#personal data
+theme_personaldata <- subset(sig_table, ThemeEn == "Personal data (1702)")
+theme_personaldata[order(-theme_personaldata$importance),] %>% kable() %>% kable_styling()
+
+#smoking
+theme_smoking <- subset(sig_table, ThemeEn == "Smoking (1505)")
+theme_smoking[order(-theme_smoking$importance),] %>% kable() %>% kable_styling()
+
+#strain
+theme_strain <- subset(sig_table, ThemeEn == "Strain (1801)")
+theme_strain[order(-theme_strain$importance),] %>% kable() %>% kable_styling()
+
+#Medicines
+theme_medicines <- subset(sig_table, ThemeEn == "Medicines (1403)")
+theme_medicines[order(-theme_medicines$importance),] %>% kable() %>% kable_styling()
+
+```
+
+```{r, eval=FALSE, echo=FALSE}
+
+# Evaluatinon of different methods:
+
+
+## Multinomial model 
+#source: https://data.library.virginia.edu/fitting-and-interpreting-a-proportional-odds-model/
+
+# @TODO: Compare different models types 
+
+#trainingRows <- sample(1:nrow(df_tmp), 0.8 * nrow(df_tmp))
+#trainingData <- df_tmp[trainingRows, ]
+#testData <- df_tmp[-trainingRows, ]
+
+
+
+mlm <- nnet(GZmehm1 ~ ., data = trainingData,family="multinomial",size = 5574900,MaxNWts =10000000)
+
+
+
+# mlm <- multinom(GZmehm1 ~ ., data = trainingData)
+
+M1 <- logLik(m)
+M2 <- logLik(mlm)
+(G <- -2*(M1[1] - M2[1]))
+
+
+# run chi-squared test
+# hint: https://rpubs.com/mpfoley73/460935 
+
+# @Interpret Chi-squared P-value -> high = the fit of both models is different from one another.
+
+
+pchisq(G,3,lower.tail = FALSE)
+```
+
+## Create meta data for the chatbot
+
+```{r}
+Varname = colnames(df_base)
+df_relevant_cols <- as.data.frame(Varname)
+df_bot_cols <- df_relevant_cols %>% dplyr::left_join(df_meta_lvls) %>% dplyr::select(-SortOrder)
+write.csv(df_bot_cols, "df_bot_cols.csv", row.names=FALSE)
+df_bot_cols
+```
+
+#Life Expectancy Transforming
+
+```{r}
+#read in the life expectancy table from #https://ec.europa.eu/eurostat/data/database?node_code=demo_mlexpec this provides the lifexpectancy for each German state broken down by age, year and gender. 
+R_lifeexp <- read_tsv("data/demo_r_mlifexp.tsv")
+```
+
+
+```{r}
+#initial data set first column is an aggregation of Units (years), Sex (abbreviation), age (years of life, i.e. YR1 equals a 1 year old), and region (assigned NUTS-2 code for each state in Europe)
+R_lifeexp <- R_lifeexp %>% separate(colOne , into = c("unit", "sex", "age", "region"), sep = ",")
+```
+
+```{r}
+#extract only the those sections that are "DE" for Germany
+R_LE_DE <- subset(R_lifeexp, grepl("DE", R_lifeexp$region) )
+#Further extract only the 3 digit german states according to NUTS-2
+R_LE_DE <- subset(R_LE_DE, nchar(region) == 3)
+R_LE_DE$age <- substring(R_LE_DE$age, 2)
+R_LE_DE$AgeBin <- NA
+```
+
+
+```{r}
+#convert all "_GE85" to 85 as these people are all 85 or older
+R_LE_DE <- mutate(R_LE_DE, age = ifelse(age == "_GE85", "85", age))
+```
+
+```{r}
+# convert all values of "_LT1" to 0 as these are people whose age is less than 1 year old
+R_LE_DE <- mutate(R_LE_DE, age = ifelse(age == "_LT1", "0", age))                               
+```
+
+```{r}
+#Convert age to number as this is needed to reassign to age bins
+R_LE_DE$age <- as.numeric(R_LE_DE$age)
+#Drop all ages below 15 since Robert koch only uses 15 years old and up
+R_LE_DE <- subset(R_LE_DE, age > 14)
+```
+
+```{r}
+#move AgeBin to the front as it is easier to verify other changes this way
+R_LE_DE<-R_LE_DE[,c(33, 1:32)]
+```
+
+
+```{r}
+#if else to assign ages to bins
+R_LE_DE <- mutate(R_LE_DE, AgeBin = ifelse(age >14 & age <20, 1, ifelse(age >19 & age <25, 2, ifelse(age > 24 & age < 30, 3, ifelse(age > 29 & age < 35, 4, ifelse(age >34 & age <40, 5, ifelse(age > 39 & age < 45, 6, ifelse(age > 44 & age < 50, 7, ifelse(age > 49 & age < 55, 8, ifelse(age > 54 & age < 60, 9, ifelse(age > 59 & age < 65, 10, ifelse(age > 64 & age < 70, 11,ifelse(age > 69 & age < 75, 12, ifelse(age > 74 & age < 80, 13,  ifelse(age > 79 & age < 85, 14, 15)))))))))))))))
+```
+
+```{r}
+#Drop all years except those in which the Robert Koch data covers 2014, 2015
+R_LE_DE <- R_LE_DE[,c(1:5, 8:9)]
+names(R_LE_DE) <- c("AgeBin", "Unit", "Sex", "Age", "Region", "Y2015", "Y2014")
+```
+
+```{r}
+#Assign factor numbers the same as they are assigned in the "df_geda_num" dataframe 
+R_LE_DE <- mutate(R_LE_DE, Region = ifelse(Region == "DE1", 8, ifelse(Region== "DE2", 9, ifelse(Region == "DE3", 11, ifelse(Region == "DE4", 12, ifelse(Region == "DE5",4,ifelse(Region == "DE6", 2, ifelse(Region == "DE7", 6, ifelse(Region == "DE8", 13, ifelse(Region == "DE9", 3, ifelse(Region == "DEA", 5,ifelse(Region == "DEB", 7, ifelse(Region == "DEC", 10, ifelse(Region == "DED", 14, ifelse(Region == "DEE", 15, ifelse(Region == "DEF", 1, ifelse(Region == "DEG", 16, Region)))))))))))))))))
+```
+
+```{r}
+#To create other charts it is also easier to reassign territories by their name for easier explanation
+R_LE_DEPPT <- mutate(R_LE_DE, Region = ifelse(Region == 8, "BADEN-W�RTTEMBERG", ifelse(Region== 9, "BAVARIA",  ifelse(Region == 11, "BERLIN",  ifelse(Region == 12, "BRANDENBERG",  ifelse(Region == 4, "BREMEN",ifelse(Region == 2, "HAMBURG",  ifelse(Region ==  6, "HESSEN", ifelse(Region == 13, "MECKLENBERG-VORPOMMERN",  ifelse(Region == 3, "LOWER SAXONY",  ifelse(Region == 5, "NORTH RHINE-WESTPHALIA", ifelse(Region == 7, "RHEINLAND-PALATINATE",  ifelse(Region == 10, "SAARLAND",  ifelse(Region == 14, "SAXONY",  ifelse(Region == 15, "SAXONY-ANHALT",  ifelse(Region == 1,"SCHLESWIG-HOLSTEIN", ifelse(Region == 16, "THURINGIA",  Region)))))))))))))))))
+```
+
+
+```{r}
+# The Europa dataset life expectancy columns provide remaining years for each age, therefore to get a total life expectancy we add the current agebin to remaining years. since the Robert Koch data covers a two year period the agebin and remaining years are added for both years.
+R_LE_DE$LifeExp.2015 <- R_LE_DE$Age + as.numeric(R_LE_DE$Y2015)
+R_LE_DE$LifeExp.2014 <- R_LE_DE$Age + as.numeric(R_LE_DE$Y2014)
+R_LE_DE <- R_LE_DE[,c(1:5, 8:9)]
+```
+
+```{r}
+#transform the dataframe from wide to long (pivot on year)
+R_LE_DE <- reshape2::melt(R_LE_DE, id.vars = c("AgeBin", "Unit", "Sex", "Age", "Region"))
+names(R_LE_DE) <- c("AgeBin", "Unit", "Sex", "Age", "Region", "Year", "LifeExp")
+R_LE_DE$Year <- sub("LifeExp.", "", R_LE_DE$Year) 
+```
+
+
+```{r}
+#Convert sex factor to the same factor as "df_geda_num" numbering system, females are 1 males are 2 and total is 3. The three will be dropped later in the process when joined to the original "df_geda_num" to create the new dataframe of "df_geda_LifeExp"
+R_LE_DE <- mutate(R_LE_DE, Sex = ifelse(Sex == "F", 2, ifelse(Sex== "M", 1, 3)))
+```
+
+
+```{r}
+#create a unique ID column for each row including the agebin(AB)+age bin values + Sex(S) + sex values, etc thru region and year. 
+R_LE_DE$JoinFac <- paste("AB", R_LE_DE$AgeBin, "S", R_LE_DE$Sex, "R", R_LE_DE$Region, "Y", R_LE_DE$Year, sep = "")
+```
+
+```{r}
+#the previous R chunk creates duplicates since the bins are in fact 5 ages each with slightly different life expectancies. Current life expectancy methodologies aggregate the data and provide the mean life expectancy when binned. The following two lines of code create a mean for each bin. 
+R_LE_DE <- aggregate(R_LE_DE$LifeExp, list(R_LE_DE$JoinFac), mean)
+names(R_LE_DE) <- c("JoinFac", "LifeExp")
+```
+
+```{r}
+#Robert Koch institute list 90 plus but the available life expectancy groups those above 85 together. This duplicates the rows for 85 year olds and carries it to the next age bin. 
+R_LE_DE90 <- R_LE_DE
+R_LE_DE90$JF4 <- stri_sub(R_LE_DE90$JoinFac, seq(1, 4,by=4), length=4)
+R_LE_DE90$JFRest <- substring(R_LE_DE90$JoinFac, 4)
+R_LE_DE90 <- subset(R_LE_DE90, JF4 == "AB15")
+R_LE_DE90$JoinFac <- gsub("AB15", "AB16", R_LE_DE90$JoinFac)
+R_LE_DE90 <- R_LE_DE90[,1:2]
+```
+
+```{r}
+#join the duplicated rows for 90 years old to the original life expectancy dataframe
+R_LE_DE <- bind_rows(R_LE_DE, R_LE_DE90)
+```
+
+```{r}
+#duplicate df_geda_num dataframe as df_geda_num2 in order to not manipulate the original dataframe
+df_geda_num2 <- df_geda_num
+#create unique ID row for "df_geda_num2"
+df_geda_num2$JoinFac <- paste("AB", df_geda_num2$age5B, "S", df_geda_num2$sex, "R", df_geda_num2$bula, "Y", df_geda_num2$untj, sep = "")
+#bring the unique ID column to the front of the dataframe
+df_geda_num2 <- df_geda_num2[,c(270, 1:269)]
+```
+
+```{r}
+#join the life expectancy table R_LE_DE to the df_geda_num2 dataframe, new dataframe "df_geda_LifeExp" is a duplicate of df_geda_num with life expectancy added
+df_geda_LifeExp <- inner_join(df_geda_num2, R_LE_DE, by = c("JoinFac" = "JoinFac" ))
+
+```
+
+
+```{r}
+#Trim down dataframe to eliminate forced NA that were resulting from entire dataframe
+df_geda_LifeExp2 <- df_geda_LifeExp %>% dplyr::select(c(LifeExp, GZmehm1, age5B, sex))
+
+```
+
+
+```{r}
+score_life_Exp <- lm(LifeExp ~ as.numeric(GZmehm1) * as.numeric(age5B) * as.numeric(sex), df_geda_LifeExp2)
+summary(score_life_Exp)
+```
+
+
+```{r}
+ggplot(df_geda_LifeExp2, aes(LifeExp, as.numeric(GZmehm1)*as.numeric(age5B)*as.numeric(sex))) +
+  geom_point(color = "lightblue") +
+  stat_smooth(method = "lm", formula = y ~ x) +
+  labs(title = "Life expectency vs wellbeing score", subtitle = "including age and gender", x = "Life Expectancy", y = "LifeExp ~ score * age * sex", caption = "GEDA (2014 - 2015)") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+```
+
+#Being Subsetting of data and analysis of individual sections. The first lines of code through to line 509 are near identical repeats of the first 608 lines of code. This was necessary as analysis beyond this point included Life Expectancy and BMI. BMI specifically was intended to be viewed in terms of those particular outcomes if possible. 
+```{r}
+df_subsetall2 <- df_geda_LifeExp %>% dplyr::select(c(
+ABschichtC, #Shift and night work
+ABsubjB, #Health risk from work
+ABtragen, #Lifting and / or carrying heavy loads
+age5B, #Age (5-year groups)
+AKbingeC_k, #Binge drinking (> = 6 alk. Drinks. On one occasion) in 4 Cat.
+AKechi47, #Hazardous alcohol consumption (ECHI 47;> 20/40 g / day)
+AKoft12_k, #Alcohol i.d.l. 12 months in 6 Cat.
+AKrisiko, #Hazardous alcohol consumption (> 20.10 g / day)
+AKrisiko2, #Hazardous alcohol consumption (> 20.10 g / day) 4 Kat.
+AMarztB, #Taking medications v. Doctor prescribed i.d.l. 2 Where
+AMfrei, #v not taking medication. Doctor prescribed i.d.l. 2 Where
+AUarbC, #not due to illness to work: I.d.l. 12 Mon.
+AUarbzD_k, #not due to illness to work: weeks
+BBbehB, #Officially recognized disability
+BBbehzC_k, #kat degree of disability.
+BBblas12B, #Urinary incontinence: I.d.l.12 Mon.
+BBdors112, #Lower back pain: I.d.l.12 Mon.
+BBdors212, #Complaints neck, cervical spine: I.d.l.12 Mon.
+BBgehen, #Schwierigk. when walking without walking aids at 500m
+BBmyo12, #Chronic pain after heart attack: I.d.l.12 Mon.
+BBsa12, #Chronic plaints. following a stroke: I.d.l.12 Mon.
+BBtreppe, #Schwierigk. Staircase with 12 steps
+BLpflege2C, #Support / care of others
+BLpflegedauB, #Support / Care: Hours per week
+bula, #state
+ENgemB, #Consumption of vegetables
+ENgemBz1, #Consumption of vegetables: per day
+ENobstB, #Consumption of fruit
+ENobstBz1, #Consumption of fruits: per day
+GVasku1, #Reliance on prop. Diffic skills. situations
+GZmehm1, #Gen. health status
+GZmehm2D, #Limited by disease for min. 6 months
+GZmehm3C, #Chronic diseases
+GZsubj1, #Pay attention to health
+IAambC, #Day patient in the hospital i.d.l. 12 Mon.
+IAambC_k, #Day patient in the hospital i.d.l. 12 month .: number of shots (top coding 10 or more)
+IAarzt14B, #Dental examination
+IAarzt1B, #Visit general practitioners or family doctor
+IAarzt1B12_k, #Visit general practitioners or family doctor i.d.l. 12 month .: Number (top coding 20 or more)
+IAarzt1B4w, #Visit general practitioners or family doctor i.d.l. 4 weeks: Number
+IAarzt8C, #Visit psychologists i.d.l. 12 Mon.
+IAcholus, #Last blood fat determination
+IAdiabus, #Last blood glucose monitoring
+IAfa, #Visiting Specialist
+IAfa12_k, #Visiting Specialist i.d.l. 12 month .: Number (top coding 20 or more)
+IAfa4w, #Visiting Specialist i.d.l. 4 weeks: Number
+IAhypus, #Last blood pressure measurement
+IAkfutyp2B_lz, #Last stool test
+IAkfutyp4B_lz, #Last colonoscopy
+IAkfutyp5B_lz, #Last cervical smear
+IAkfutyp7B_lz, #Last mammography
+IAkfutyp7Bgr, #Reason for the last mammogram
+IAkhs, #Stationary i.d.l. in hospital 12 Mon.
+IAkhs_k, #Stationary i.d.l. in hospital 12 month .: Number of nights (cat)
+IAkosten1, #US Required / n treatment. Affordable i.d.l. 12 month .: Physicians. US / treatment
+IAkosten2, #US Required / n treatment. Affordable i.d.l. 12 month .: Zahnärztl. US / treatment
+IAkosten3, #US Required / n treatment. Affordable i.d.l. 12 month .: Prescribed Med.
+IAkosten4, #US Required / n treatment. Affordable i.d.l. 12 month .: US / psy treatment. Prob.
+IAkv1D, #Health Insurance in 3 Cat.
+IApflege, #Use of home care services: I.d.l. 12 Mon.
+IAtermin, #i.d.l. waiting for examination appointment 12 Mon.
+IAther2B, #Visit physiotherapists i.d.l. 12 Mon
+IAweg, #Investigation delayed due i.d.l. Distance 12 Mon.
+IPinfl1314B, #Flu vaccination winter season 2013/2014 generated
+IPinfl1415B, #Flu vaccination winter season 2014/2015 generated
+IPinfl4, #Last flu shot
+IPinfl4_jj, #Last flu shot: Year
+IPinfl4_mm, #Last flu shot: Month
+IPinfl6B, #Frequency flu vaccine generated
+IPtet, #Ever tetanus vaccination
+IPtet_lz, #Last tetanus shot
+KAabka, #Moderate to very strenuous arbeitsbez. körp. activity
+KAehispaq1, #Activities (effort)
+KAehispaq2, #Movement on foot: days a week
+KAehispaq3, #Movement on foot: Duration
+KAehispaq4, #Movement with bicycle: days a week
+KAehispaq5, #Movement with bicycle: Duration
+KAehispaq6, #Sports: days a week
+KAehispaq8, #Building / strengthening: days a week
+KAgfa, #> = 150 min Ausdaueraktiv.und 2x / week Active. for Muskelkräft. (stop. WHO both Sens.)
+KAgfka, #Stop. aerobic WHO Bew.empf. (With Go> = 150 min. Aerobic körp. Aktiv./Wo)
+KAgfka1, #Stop. aerobic WHO Bew.empf. (O. Go> = 150 aerobic körp. Aktiv./Wo min.)
+KAgfmk, #WHO Rec. to Muskelkräft. (> = 2x / wk. Activities. To strengthen the muscles)
+KAgka, #Sufficient körp. active during work or leisure
+KAgka_k, #total activity
+KAsabka, #Very strenuous work-related physical activity
+KAspodauC_k, #Sports week in total (category Siert in 30 min)
+KAtbka_k, #Transportbez. körp. Activity in MET / hours / week (top coding from 100h)
+KHab12, #Asthma: I.d.l.12 Mon.
+KHalgi112, #Allergies: I.d.l. 12 Mon.
+KHbbmyo12, #Heart attack / chron. Plaints .: I.d.l. 12 Mon.
+KHbbsa12, #Stroke / chron. Complaints resulting SA: I.d.l.12 Mon.
+KHcb12, #Chronic bronchitis: I.d.l.12 Mon.
+KHced12, #Inflammatory bowel disease: I.d.l.12 Mon.
+KHcle12, #Other chronic liver diseases: I.d.l.12 Mon.
+KHdge12, #Osteoarthritis: I.d.l.12 Mon.
+KHdiabB12, #Diabetes: I.d.l.12 Mon.
+KHhi12, #Heart failure: I.d.l.12 Mon.
+KHhyp, #Hypertension: Ever diagnosed medically
+KHhyp12, #Hypertension: I.d.l.12 Mon.
+KHhyp12pB, #Indicator bek. (Ärztl. Diagn.) Hypertension pressure i.d.l. 12 Mon
+KHhypmedC, #Indicator antihypertensive agents with known hypertension
+KHkarz12, #Cancer: I.d.l.12 Mon.
+KHkhk12, #Coronary heart disease / angina pectoris: I.d.l.12 Mon.
+KHlip12A, #Elevated blood lipids / Chol .: I.d.l.12 Mon.
+KHlipA, #Ever elevated blood lipids / Cholesterinw. (Physician diagnosis)
+KHlipmedA, #Elevated cholesterol: Currently taking medication
+KHlz12, #Cirrhosis: I.d.l.12 Mon.
+KHmyo12, #Heart Attack: I.d.l. 12 Mon.
+KHniB12, #. Chronic kidney problems: I.d.l.12 Mon.
+KHos12, #Osteoporosis: I.d.l.12 Mon.
+KHra12, #Arthritis: I.d.l.12 Mon.
+KHsa12, #Stroke: I.d.l.12 Mon.
+KHulc12, #Gastric or duodenal ulcer: I.d.l.12 Mon.
+LQsf367C, #Strength pain i.d.l. 4 weeks
+LQsf368C, #Disability in daily activities due to pain i.d.l. 4 weeks
+LQzufrB10, #overall life satisfaction
+MIbirthplace, #Country of birth (EHIS)
+MIcitizen, #nationality
+PAadiposB, #Obesity according to WHO (BMI> = 30; from self-declaration)
+PAbmiB_k, #BMI moiety (from self-specification)
+PAbmiB_k2, #BMI grouping detaill. (From self-specification)
+PAfam3, #Living together in marriage or cohabitation
+PAgewiB, #Body weight (self-specification) [kg]
+PAgroe, #Height (self-specification) [cm]
+PAhh_k, #Number of people in household (cat.)
+PAhhtype, #household type
+PAueberB, #Obesity according to WHO (BMI> = 25; from self-declaration)
+PKdep12, #Depression: I.d.l. 12 Mon.
+PKphq1, #Adversely. i.d.l. 2 Where .: Little interest / pleasure in your activities
+PKphq2, #Adversely. i.d.l. 2 Where .: dejection, melancholy / hopelessness
+PKphq3, #Adversely. i.d.l. 2 Where .: Schwierigk., On / od asleep. Increased sleep
+PKphq4, #Adversely. i.d.l. 2 Where .: fatigue / feeling, k. to have power
+PKphq5, #Adversely. i.d.l. 2 Where .: Vermind. Appetite / excessive need to eat
+PKphq6, #Adversely. i.d.l. 2 Where v .: Poor opinion. yourself; to disappointments failure / family.
+PKphq7, #Adversely. i.d.l. To focus 2 Where .: Schwierigk.
+PKphq8, #Adversely. i.d.l. 2 Where .: change in movement or speech
+PKphq8diag, #PHQ-8: Diagnostic Cat.
+RC_ak, #Start smoking: age (cat.)
+RCex_ak, #End Smoking: age (cat.)
+RCpass4, #Smoking in enclosed spaces
+RCpassort_m1, #Passive smoking: Work
+RCpassort_m2, #Passive Smoking: at home
+RCpassort_m3, #Passive smoking: pubs / cafes / bars / disco
+RCpassort_m4, #Passive smoking restaurant
+RCpassort_m5, #Passive smoking: friends / acquaintances
+RCpassort_m6, #Passive smoking: Change village
+RCpassort_m7, #Passive smoking: public. building
+RCstat, #Smoke
+RCtyp_m1, #Tobacco products: Factory-built cigarettes
+RCtyp_m2, #Tobacco Products: Hand-rolled cigarettes
+RCtyp_m3, #Tobacco products: cigars, cigarillos
+RCtyp_m4, #Tobacco products: pipe tobacco
+RCtyp_m6, #Tobacco products: Miscellaneous
+RCtyp_m7, #Tobacco Products: E-Cigarette
+RCtyphaupt, #Mainly smoked Takabprodukt
+RCz2B_ttk, #Hand-rolled cigarettes daily: (cat.) Number
+RCz2B_wwk, #-Rolled cigarettes weekly: Quantity (kat)
+RCzA_ttk, #Daily. Smoking: Tgl. Number of cigarettes (cat.)
+RCzA_wwk, #Cigarettes weekly (cat.) No.
+SDaeqeink_k, #Equivalent income (imputed, kat) [€]
+SDalo, #Unemployed i.d.l. 5 years
+SDalo_mmk, #Unemployed: total months i.d.l. 5 years (cat.)
+SDalogz, #Change in health by unemployment
+SDalokh, #Unemployment to do with disease
+SDbest, #Professional status in main job
+SDbest_lz, #Professional status in last main job
+SDbild1D, #Highest general. Bildener school
+SDbild4C, #Highest berufl. Training or university / college degree
+SDbverh, #Type of last employment
+SDbverh2, #Type of employment
+SDerwt0a, #Life situation currently
+SDetoed, #Main job in public. service
+SDft_pt, #Full or part time employment
+SDfuehr, #Recent activity primarily as a management supervisor
+SDfuehr2, #Activity primarily as a management supervisor
+SDhhincomez, #Monthly. (Imputed) HH net income into quintiles
+SDhvtypD, #Breadwinner in the household
+SDjobstat, #Professional status
+SDmainstat, #Employment (EHIS)
+SDses, #Socioeconomic status (SES)
+SEschwA_zz, #Pregnant at the time
+sex, #gender
+SFoslo1C, #Related parties
+SFoslo2C, #Participation of other persons
+SFoslo3A, #Getting Help
+SFosloA, #Social support (Oslo 3 Social Support Scale)
+SHhoer1, #hearing Aid
+SHhoer5, #Schwierigk. even with hearing aids: Quiet room
+SHhoer6, #Schwierigk. even with hearing aids: Loud room
+SHseh1, #Glasses or Contacts
+SHseh2C, #Difficulties even with glasses or contact lenses
+UVarbeit1, #Injury accident at work: I.d.l. 12 months (no way accident)
+UVarbeit2, #Injury accident at work: medicine. provided (no way accident)
+UVartfreiz, #Wg injury. Accident i.d.l. 12 months: Accident in leisure
+UVarthaus, #Wg injury. Accident i.d.l. 12 months: Accident at home
+UVartverkehr, #Wg injury. Accident i.d.l. 12 months: Traffic accident
+UVarztE_k, #Medical care after an accident three Cat.
+PAbmiB_k2,
+LifeExp
+))
+```
+
+```{r}
+for (i in colnames(df_subsetall2)){
+  
+  col_meta <- df_meta_lvls[df_meta_lvls$Varname == i,]
+  
+  col_type <- col_meta[1,]$Type
+  
+  if(nrow(col_meta) > 0){
+    
+    if (col_type == 'Nominal' |col_type == 'Ordinal' ){
+      
+      unique_lvls <- unique(df_geda_de[[i]])
+      
+      # for text columns, change data to factors 
+      
+      df_subsetall2[[i]] <- factor(df_subsetall2[[i]], levels=col_meta$numLevel, labels=col_meta$numLevel)
+      
+    }else if (col_type == "Scale"){
+      
+      unique_lvls <- unique(col_meta)
+      
+      for (row_it in 1:nrow(col_meta)){
+        
+        l <- col_meta[row_it,]$textLevel
+        
+        if (!is.na(l) & l != ""){
+        
+          df_subsetall2[[i]][df_subsetall2[[i]] == l] <- col_meta[col_meta$textLevel == l,]$numLevel
+          
+        }
+        
+      }
+      
+      # for scale columns, change datatype to numeric 
+      df_subsetall2[[i]]<- as.numeric(df_subsetall2[[i]])
+      
+    }
+      # add variable label, access this with Hmisc-functions like describe(%dataframe%)
+      
+      label(df_subsetall2[[i]]) <- col_meta[1,]$VarLabel
+      
+      
+  }else{
+    print(paste(i, ": type: ", col_type))
+  }
+  
+}
+```
+
+```{r}
+df_subsetall2[df_subsetall2$ENobstB == 2 & !is.na(df_subsetall2$ENobstBz1),]$ENobstBz1 = round(5/7,2)
+df_subsetall2[df_subsetall2$ENobstB == 3 & !is.na(df_subsetall2$ENobstBz1),]$ENobstBz1 = round(2/7,2)
+df_subsetall2[df_subsetall2$ENobstB == 4 & !is.na(df_subsetall2$ENobstBz1),]$ENobstBz1 = round(1/7,2)
+df_subsetall2[df_subsetall2$ENobstB == 5 & !is.na(df_subsetall2$ENobstBz1),]$ENobstBz1 = 0
+
+df_subsetall2$ENobstBz1 <- as.numeric(df_subsetall2$ENobstBz1)
+
+# deselect the question 
+df_subsetall2<- df_subsetall2 %>% dplyr::select(-ENobstB)
+```
+
+```{r}
+df_subsetall2[df_subsetall2$ENgemB == 2 & !is.na(df_subsetall2$ENgemBz1),]$ENgemBz1 = round(5/7,2)
+df_subsetall2[df_subsetall2$ENgemB == 3 & !is.na(df_subsetall2$ENgemBz1),]$ENgemBz1 = round(2/7,2)
+df_subsetall2[df_subsetall2$ENgemB == 4 & !is.na(df_subsetall2$ENgemBz1),]$ENgemBz1 = round(1/7,2)
+df_subsetall2[df_subsetall2$ENgemB == 5 & !is.na(df_subsetall2$ENgemBz1),]$ENgemBz1 = 0
+
+df_subsetall2$ENgemBz1 <- as.numeric(df_subsetall2$ENgemBz1)
+
+# deselect the question 
+df_subsetall2<- df_subsetall2 %>% dplyr::select(-ENgemB)
+```
+
+```{r}
+df_subsetall2[(df_subsetall2$SDbild1D == 8 | df_subsetall2$SDbild1D == 1 | df_subsetall2$SDbild1D == 2 | df_subsetall2$SDbild1D == 3) & !is.na(df_subsetall2$SDbild1D),]$SDbild1D <- 2
+df_subsetall2[(df_subsetall2$SDbild1D == 3 | df_subsetall2$SDbild1D == 4 | df_subsetall2$SDbild1D == 5) & !is.na(df_subsetall2$SDbild1D) ,]$SDbild1D <- 5
+df_subsetall2[(df_subsetall2$SDbild1D == 6 | df_subsetall2$SDbild1D == 7) & !is.na(df_subsetall2$SDbild1D) ,]$SDbild1D <- 7
+
+df_subsetall2$SDbild1D <- drop.levels(df_subsetall2$SDbild1D)
+```
+
+```{r}
+df_subsetall2[df_subsetall2$KAspodauC_k == '-96' & !is.na(df_subsetall2$KAspodauC_k),]$KAspodauC_k <- 0
+
+df_subsetall2$KAspodauC_k <- as.numeric(df_subsetall2$KAspodauC_k)
+```
+
+```{r}
+df_subsetall2$AUarbzD_k <- as.numeric(df_overall$AUarbzD_k)
+```
+
+```{r}
+df_subsetall2[(df_subsetall2$IPtet_lz == '-96' | df_subsetall2$IPtet_lz == '-95' ) & !is.na(df_subsetall2$IPtet_lz),]$IPtet_lz <- NA
+```
+
+```{r}
+df_subsetall2[df_subsetall2$IAarzt1B4w == '-96' & !is.na(df_subsetall2$IAarzt1B4w),]$IAarzt1B4w <- 0
+
+df_subsetall2$IAarzt1B4w <- as.numeric(df_subsetall2$IAarzt1B4w)
+```
+
+```{r}
+df_subsetall2[df_subsetall2$IAfa4w == '-96' & !is.na(df_subsetall2$IAfa4w),]$IAfa4w <- 0
+
+df_subsetall2$IAfa4w <- as.numeric(df_subsetall2$IAfa4w)
+```
+
+```{r}
+df_subsetall2$IAkhs_k <- as.numeric(df_subsetall2$IAkhs_k)
+```
+
+```{r}
+df_subsetall2$flagHadAccident <-  ifelse( is.na(df_subsetall2$UVartverkehr) & is.na(df_subsetall2$UVarthaus) & is.na(df_subsetall2$UVartfreiz) & is.na(df_subsetall2$UVarbeit1), NA, 
+        
+        ifelse(df_subsetall2$UVartverkehr == 1 | df_subsetall2$UVarthaus == 1 |df_subsetall2$UVartfreiz == 1 |df_subsetall2$UVarbeit1 == 1 , 
+1,0))
+
+df_subsetall2$flagHadAccident <- factor(df_subsetall2$flagHadAccident)
+```
+
+```{r}
+col_meta <- df_meta_lvls[df_meta_lvls$Varname == 'GZmehm1',]
+
+df_subsetall2$GZmehm1 <- ordered(df_subsetall2$GZmehm1, levels=col_meta[order(col_meta$numLevel),]$numLevel, labels=col_meta[order(col_meta$numLevel),]$numLevel)
+
+describe(df_subsetall2$GZmehm1)
+```
+
+```{r}
+curr_cols2 <- c(
+  
+  # step 1: master data
+  'sex', #Geschlecht
+  "age5B", #Alter (5-Jahres-Gruppen)
+  "MIbirthplace", #Geburtsland (EHIS)
+  "MIcitizen", #Staatsangehörigkeit
+  "bula", #Bundesland
+  "PAgroe", #Körpergröße (Selbstangabe) [cm]
+  "PAgewiB", #Körpergewicht (Selbstangabe) [kg]
+  "IAkv1D", #Krankenversicherung in 3 Kat.
+  
+  # step 2: socio economic data
+  "SDaeqeink_k", #Äquivalenzeinkommen (imputiert,kat) [€]
+  "SDbild4C", #Höchster berufl. Ausbildungs- oder Hochschul/Fachhochschulabschluss
+  "SDbverh2", #Art des Beschäftigungsverhältnisses
+  "SDhvtypD", #Hauptverdiener im Haushalt
+  "SDmainstat", # Erwerbstätigkeit
+  "SDalo", #Arbeitslos i.d.l. 5 Jahren, 
+  "PAhhtype", #Haushaltstyp
+  
+  # step 3: way of life
+  "ENobstBz1",  #Verzehr von Obst: pro Tag
+  "ENgemBz1", #Verzehr von Gemüse: pro Tag
+  "AKoft12_k", #Alkohol i.d.l. 12 Mon. in 6 Kat.
+  "RCstat",  # Smoking
+  "KAehispaq2", #Bewegung zu Fuß: Tage pro Woche
+  "KAehispaq4", #Bewegung mit Fahrrad: Tage pro Woche
+  "KAspodauC_k", #Sport pro Woche insgesamt (in 30 min kategoriesiert)
+  "KAehispaq8", #Aufbau/Kräftigung: Tage pro Woche
+  "KAgfka", #Einhalt. aerobe WHO-Bew.empf. (mit Gehen >= 150 Min. aerobe körp. Aktiv./Wo)
+  "KAgfa", #>= 150 min Ausdaueraktiv.und 2 x/ Woche Aktiv. zur Muskelkräft.(Einhalt. beider WHO-Empf.)
+  "KAgfka1", #Einhalt. aerobe WHO-Bew.empf. (o. Gehen >= 150 Min. aerobe körp. Aktiv./Wo)
+  "KAgfmk", #WHO-Empf. zur Muskelkräft. (>= 2x/Wo. Aktivit. zur Muskelkräftigung)
+  
+  # step 4: health care
+  "IPinfl4", #Letzte Grippeimpfung
+  "IPinfl6B", #Häufigkeit Grippeimpfung, generiert
+  "IPtet_lz", #las tetanus vaccination --> flag cannot be used since there are only "YES" tetanus vaccinated people
+  "AMarztB", #Einnahme Medikamente v. Arzt verschrieben i.d.l. 2 Wo
+  "AMfrei", #Einnahme Medikamente nicht v. Arzt verschrieben i.d.l. 2 Wo
+  "AUarbzD_k", #Krankheitsbedingt nicht zur Arbeit: Wochen
+  "IAhypus", #Letzte Blutdruckmessung
+  "IAcholus", #Letzte Blutfettwertebestimmung
+  "IAdiabus", #Letzte Blutzuckermessung
+  "IAkfutyp2B_lz", #Letzter Stuhltest
+  "IAkfutyp4B_lz", #Letzte Darmspiegelung
+  # exclude as of now, since only relevant for women: IAkfutyp7B_lz, #Letzte Mammografie
+  # exclude as of now, since only relevant for women: IAkfutyp7Bgr, #Grund für die letzte Mammografie
+  # exclude as of now, since only relevant for women: IAkfutyp5B_lz, #Letzter Gebärmutterhalsabstrich
+  "IAtermin", #Auf Untersuchungstermin gewartet i.d.l. 12 Mon.
+  "IAweg", #Untersuchung verzögert wegen Entfernung i.d.l. 12 Mon.
+  # IAkosten1, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: Ärztl. US/Behandlung
+  # IAkosten2, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: Zahnärztl. US/Behandlung
+  # IAkosten3, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: Verordnete Med.
+  # IAkosten4, #Benötigte US/Behandlung n. bezahlbar i.d.l. 12 Mon.: US/Behandlung psy. Prob.
+  "IAarzt14B", #Zahnmedizinische Untersuchung
+  "IAarzt1B4w", #Besuch Allgemeinarzt oder Hausarzt i.d.l. 4 Wochen: Anzahl
+  "IAfa4w", #Besuch Facharzt i.d.l. 4 Wochen: Anzahl
+  "IAarzt8C", #Besuch Psychologen i.d.l. 12 Mon.
+  "IAkhs", #Stationär im Krankenhaus i.d.l. 12 Mon.
+  "IAkhs_k", #Stationär im Krankenhaus i.d.l. 12 Mon.: Anzahl der Nächte (kat) --> encoded in # of weeks
+  "IAther2B", #Besuch Physiotherapeuten i.d.l. 12 Mon
+  "IApflege", #Inanspruchnahme häuslicher Pflegedienst: I.d.l. 12 Mon.
+  
+  # step 5: health conditions
+  # exclude as of now, since only relevant for women: "SEschwA_zz", #Schwanger zur Zeit
+  "GZmehm3C", #Chronische Krankheiten
+  "GZmehm2D", #Einschränkung durch Krankheit seit mind. 6 Monaten
+  "BBbehB", #Amtlich anerkannte Behinderung 
+  "GZsubj1", #Achten auf Gesundheit
+  "SHseh1", #Brille oder Kontaktlinsen
+  "SHhoer1", #Hörgerät
+  "LQsf367C", #Stärke Schmerzen i.d.l. 4 Wochen
+  "LQsf368C", #Behinderung in Alltagstätigkeiten durch Schmerzen i.d.l. 4 Wochen
+  "flagHadAccident" , # has had any injuries due to accidents in past 12 months
+  "BBdors112", #Beschwerden unterer Rücken: I.d.l.12 Mon.
+  "BBdors212", #Beschwerden Nacken, Halswirbelsäule: I.d.l.12 Mon.
+  "BBblas12B", #Harninkontinenz: I.d.l.12 Mon.
+  "BBgehen", #Schwierigk. beim Laufen ohne Gehhilfe auf 500m
+  "BBtreppe", #Schwierigk. Treppe mit 12 Stufen
+  "BBmyo12", #Chronische Beschwerden nach Herzinfarkt: I.d.l.12 Mon.
+  "BBsa12", #Chronische Beschw. infolge eines Schlaganfalls: I.d.l.12 Mon.
+  "KHhyp12", #Bluthochdruck: I.d.l.12 Mon.
+  "KHhyp", #Bluthochdruck: Jemals ärztlich diagnostiziert
+  "KHhyp12pB", #Indikator bek. (ärztl. diagn.) Bluthochdruckdruck i.d.l. 12 Mon
+  "KHhypmedC", #Indikator blutdrucksenkende Mittel bei bekannter Hypertonie
+  "KHmyo12", #Herzinfarkt: I.d.l. 12 Mon.
+  "KHkhk12", #Koronare Herzerkrankung/Angina Pectoris: I.d.l.12 Mon.
+  "KHbbmyo12", #Herzinfarkt/chron. Beschw.: I.d.l. 12 Mon.
+  "KHhi12", #Herzinsuffizienz: I.d.l.12 Mon.
+  "KHsa12", #Schlaganfall: I.d.l.12 Mon.
+  "KHdiabB12", #Diabetes: I.d.l.12 Mon.
+  "KHab12", #Asthma: I.d.l.12 Mon.
+  "KHkarz12", #Krebserkrankung: I.d.l.12 Mon.
+  "KHlip12A", #Erhöhte Blutfette/Chol.: I.d.l.12 Mon.
+  "KHlipA", #Jemals erhöhte Blutfette/Cholesterinw. (Arztdiagnose)
+  "KHlipmedA", #Erhöhtes Cholesterin: Zurzeit Medikamenteneinnahme
+  "KHcb12", #Chronische Bronchitis: I.d.l.12 Mon.
+  "KHulc12", #Magen- oder Zwölffingerdarmgeschwür: I.d.l.12 Mon.
+  "KHced12", #Chronisch entzündliche Darmerkrankung: I.d.l.12 Mon.
+  "KHlz12", #Leberzirrhose: I.d.l.12 Mon.
+  "KHcle12", #Andere chronische Lebererkrankungen: I.d.l.12 Mon.
+  "KHniB12", #Chron. Nierenprobleme: I.d.l.12 Mon.
+  "KHdge12", #Arthrose: I.d.l.12 Mon.
+  "KHra12", #Arthritis: I.d.l.12 Mon.
+  "KHos12", #Osteoporose: I.d.l.12 Mon.
+  "KHalgi112", #Allergien: I.d.l. 12 Mon.
+
+  # step 6: psychological health
+  "LQzufrB10", #Zufriedenheit: Leben insgesamt
+  "PKdep12", #Depression: I.d.l. 12 Mon.
+  "SFoslo1C", #Nahestehende Personen
+  "SFoslo3A", #Erhalt von Hilfe
+  "SFosloA", #Soziale Unterstützung (Oslo-3 Social Support Scale)
+  "PAbmiB_k2",
+  "LifeExp"
+)
+
+curr_cols_all2 <- append(curr_cols2, "GZmehm1")
+```
+
+```{r}
+#All code above is the same as what is used in the Well-Being Rmd file with the exception that in this file it adds in life expectancy in the even it may add value to review it. 
+
+#The following is a dataframe based on this data and will be the base of all subsets for future things that are not modelled. 
+
+
+df_subsetall3 <- df_subsetall2 %>% dplyr::select(curr_cols_all2) 
+df_subsetall3 <- df_subsetall3[complete.cases(df_subsetall3),]
+for (c in colnames(df_subsetall3)){
+  df_subsetall3[[c]] <- drop.levels(df_subsetall3[[c]])
+}
+df_subsetall3 <- df_subsetall3[complete.cases(df_subsetall3),]
+```
+
+
+
+##Training Data
+```{r}
+df_subsetbase <- df_subsetall3 #%>% dplyr::select(-c(KHhyp12pB, KHbbmyo12, LifeExp))
+
+subsettrainingRows <- sample(1:nrow(df_subsetbase), 0.8 * nrow(df_subsetbase))
+subsettrainingData <- df_tmp[subsettrainingRows, ]
+subsettestData <- df_tmp[-subsettrainingRows, ]
+```
+
+##Models
+
+###Training polr Data Model
+```{r}
+#model based on training data
+mt <- polr(as.factor(GZmehm1) ~ ., data = subsettrainingData, Hess=TRUE)
+
+```
+
+```{r}
+df_model_sumt <- as.data.frame(coef(summary(mt)))
+
+## calculate and store p values
+df_model_sumt$p <- pnorm(abs(df_model_sumt$`t value`), lower.tail = FALSE) * 2
+
+df_model_sumt$sig_col <- ifelse(df_model_sumt$p < 0.001,'***',ifelse(df_model_sumt$p < 0.01,'**',
+                     ifelse(df_model_sumt$p < 0.05,'*',
+                            ifelse(df_model_sumt$p < 0.1,'.', ''
+                     ))))
+
+
+df_model_sumt$logodds <- format(exp(df_model_sumt$Value), trim = TRUE, digits = 3, scientific = F)
+
+df_meta_lvls$coeff_label <- paste0(df_meta_lvls$Varname,df_meta_lvls$numLevel)
+df_model_sumt <- setDT(df_model_sumt, keep.rownames = TRUE)[]
+df_model_sumt <- df_model_sumt %>% dplyr::rename(coeff_label = rn)
+df_model_sumt <- df_model_sumt %>% left_join((df_meta_lvls %>% dplyr::select(c(coeff_label, ThemeEn, Varname, VarLabelEn, textLabelEn))), by="coeff_label")
+df_model_sumt <- df_model_sumt %>% rename(Training_value = Value, Training_Std.Error = `Std. Error`, Training_T.Value = `t value`, Training_p = p, Training_Sig = sig_col, Training_logodds = logodds)
+
+#library(kableExtra)
+
+df_model_sumt %>%
+  kable(booktabs = T,  digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)
+
+```
+
+###Full Dataset polr model
+```{r}
+#model based on complete dataset
+md <- polr(as.factor(GZmehm1) ~ ., data = df_subsetbase, Hess=TRUE)
+#summary(md)
+
+```
+
+```{r}
+df_model_sumd <- as.data.frame(coef(summary(md)))
+
+## calculate and store p values
+df_model_sumd$p <- pnorm(abs(df_model_sumd$`t value`), lower.tail = FALSE) * 2
+
+df_model_sumd$sig_col <- ifelse(df_model_sumd$p < 0.001,'***',ifelse(df_model_sumd$p < 0.01,'**',
+                     ifelse(df_model_sumd$p < 0.05,'*',
+                            ifelse(df_model_sumd$p < 0.1,'.', ''
+                     ))))
+
+
+df_model_sumd$logodds <- format(exp(df_model_sumd$Value), trim = TRUE, digits = 3, scientific = F)
+
+df_meta_lvls$coeff_label <- paste0(df_meta_lvls$Varname,df_meta_lvls$numLevel)
+df_model_sumd <- setDT(df_model_sumd, keep.rownames = TRUE)[]
+df_model_sumd <- df_model_sumd %>% dplyr::rename(coeff_label = rn)
+df_model_sumd <- df_model_sumd %>% left_join((df_meta_lvls %>% dplyr::select(c(coeff_label, ThemeEn, Varname, VarLabelEn, textLabelEn))), by="coeff_label")
+df_model_sumd <- df_model_sumd %>% rename(Full_value = Value, Full_Std.Error = `Std. Error`, Full_T.Value = `t value`, Full_p = p, Full_Sig = sig_col, Full_logodds = logodds)
+
+df_model_sumd %>%
+  kable(booktabs = T, digits = 4 ) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)
+
+```
+
+###Comparison of Training vs Full Dataset models
+```{r}
+#Model to join and compare differences between the full dataset and the dataset model and the training data model 
+df_model_sumall <- dplyr::full_join(df_model_sumd, df_model_sumt, by = "coeff_label")
+df_model_sumall <- df_model_sumall %>% dplyr::select(-c(Varname.y, VarLabelEn.y, ThemeEn.y, textLabelEn.y))
+df_model_sumall <- df_model_sumall %>% dplyr::select(c("coeff_label", "Full_value", "Training_value", "Full_Std.Error", "Training_Std.Error", "Full_T.Value", "Training_T.Value", "Full_p", "Training_p", "Full_Sig", "Training_Sig", "Full_logodds", "Training_logodds", "ThemeEn.x", "Varname.x", "VarLabelEn.x", "textLabelEn.x"))
+
+df_model_sumall %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) 
+```
+
+
+```{r}
+df_model_sumd <- df_model_sumd %>% rename(Value = Full_value , Std_Error =  Full_Std.Error, T_Value = Full_T.Value, p_value = Full_p, Sig = Full_Sig, Logodds = Full_logodds)
+
+df_model_sumd <- df_model_sumd %>% dplyr::select(-c(Value, T_Value, Varname))
+
+df_model_sumd %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) 
+```
+
+
+```{r}
+df_model_sumd2 <- df_model_sumd 
+
+df_model_sumd2 <- df_model_sumd2[1:15,]
+
+
+df_model_sumd2 %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%   save_kable("data/agegenderexample.png")
+
+```
+
+
+```{r}
+#Recreation of the significance for each variable theme, recreation of file titled 2.7_stat_sig_var.csv based on the significance in the full dataset model. 
+df_modelsig <- reshape2::dcast(df_model_sumd, ThemeEn ~ Sig)
+df_modelsig$significant <- (df_modelsig$`*` + df_modelsig$`**` + df_modelsig$`***` + df_modelsig$.)
+df_modelsig <- df_modelsig %>% rename(Not_significant = Var.2)
+rownames(df_modelsig) <- c("Age & Gender", "Alcohol", "Diseases", "Disability", "Health", "Medicines", "Mental Health", "Migration Status",  "Personal",  "Physical Activity","Protection Factors", "Qualtiy of Life", "Sight and Hearing", "Smoking", "SocioDemographics", "State", "Use", "Vaccinations", "None")
+df_modelsig$ThemeEn <- rownames(df_modelsig)
+rownames(df_modelsig) <- c()
+
+df_modelsig <- df_modelsig %>% dplyr::select(c(ThemeEn, significant, Not_significant))
+df_modelsig <- df_modelsig %>% pivot_longer(-ThemeEn, names_to = "condition", values_to = "value")
+
+df_modelsig <- df_modelsig %>% rename(theme = ThemeEn)
+df_modelsig <- df_modelsig[1:36,]
+
+
+df_modelsig %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) 
+
+```
+
+```{r}
+describe(df_modelsig)
+```
+
+
+```{r}
+#var_sig3 <- read_csv("data/modelsig.csv")
+
+ggplot(df_modelsig, aes(fill=condition, x=reorder(theme, -value), y=value)) +
+  geom_bar(position="stack", stat="identity") +
+  labs(title = "Statistically significant variables", x = " ", y = " ", caption = "GEDA (2014 - 2015)") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank()) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_fill_manual(values = c("gray", "lightblue"))
+```
+
+
+## Gender Subsets
+
+```{r}
+#Gender subsets
+df_subset_female <- filter(df_subsetall3, sex == "2")
+df_subset_female <- df_subset_female %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12, sex, LifeExp)) 
+
+df_subset_male <- filter(df_subsetall3, sex == "1")
+df_subset_male <- df_subset_male %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12, sex, LifeExp))
+```
+
+```{r}
+#create training/test date
+df_fem_base <- df_subset_female 
+
+#run ordinal logistic regression
+m_female <- polr(GZmehm1 ~ ., data = df_fem_base, Hess=TRUE)
+
+
+df_model_female <- as.data.frame(coef(summary(m_female)))
+
+## calculate and store p values
+df_model_female$p <- pnorm(abs(df_model_female$`t value`), lower.tail = FALSE) * 2
+
+df_model_female$sig_col <- ifelse(df_model_female$p < 0.001,'***',ifelse(df_model_female$p < 0.01,'**',
+                     ifelse(df_model_female$p < 0.05,'*',
+                            ifelse(df_model_female$p < 0.1,'.', ''
+                     ))))
+
+
+df_model_female$logodds <- format(exp(df_model_female$Value), trim = TRUE, digits = 3, scientific = F)
+
+df_meta_lvls$coeff_label <- paste0(df_meta_lvls$Varname,df_meta_lvls$numLevel)
+df_model_female <- setDT(df_model_female, keep.rownames = TRUE)[]
+df_model_female <- df_model_female %>% dplyr::rename(coeff_label = rn)
+df_model_female <- df_model_female %>% left_join((df_meta_lvls %>% dplyr::select(c(coeff_label, ThemeEn, Varname, VarLabelEn, textLabelEn))), by="coeff_label")
+df_model_female <- df_model_female %>% rename(Female_value = Value, Female_Std.Error = `Std. Error`, Female_T.Value = `t value`, Female_p = p, Female_Sig = sig_col, Female_logodds = logodds)
+
+df_model_female %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"))
+```
+
+
+```{r}
+df_male_base <- df_subset_male 
+
+#run ordinal logistic regression
+m_male <- polr(GZmehm1 ~ ., data = df_male_base, Hess=TRUE)
+
+
+df_model_male <- as.data.frame(coef(summary(m_male)))
+
+## calculate and store p values
+df_model_male$p <- pnorm(abs(df_model_male$`t value`), lower.tail = FALSE) * 2
+
+df_model_male$sig_col <- ifelse(df_model_male$p < 0.001,'***',ifelse(df_model_male$p < 0.01,'**',
+                     ifelse(df_model_male$p < 0.05,'*',
+                            ifelse(df_model_male$p < 0.1,'.', ''
+                     ))))
+
+
+df_model_male$logodds <- format(exp(df_model_male$Value), trim = TRUE, digits = 3, scientific = F)
+
+df_meta_lvls$coeff_label <- paste0(df_meta_lvls$Varname,df_meta_lvls$numLevel)
+df_model_male <- setDT(df_model_male, keep.rownames = TRUE)[]
+df_model_male <- df_model_male %>% dplyr::rename(coeff_label = rn)
+df_model_male <- df_model_male %>% left_join((df_meta_lvls %>% dplyr::select(c(coeff_label, ThemeEn, Varname, VarLabelEn, textLabelEn))), by="coeff_label")
+df_model_male <- df_model_male %>% rename(Male_value = Value, Male_Std.Error = `Std. Error`, Male_T.Value = `t value`, Male_p = p, Male_Sig = sig_col, Male_logodds = logodds)
+
+df_model_male %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position")) 
+```
+
+### Table 23 Comparison of Male vs Female significant drivers
+```{r}
+#Model to join and compare differences between Male and Female datasets using the full dataset not the training dataset 
+df_model_genders <- dplyr::full_join(df_model_male, df_model_female, by = "coeff_label")
+df_model_genders <- df_model_genders %>% dplyr::select(-c(Varname.y, VarLabelEn.y, ThemeEn.y, textLabelEn.y))
+
+df_model_genders <- df_model_genders %>% dplyr::select(c("coeff_label", "Male_Std.Error", "Female_Std.Error", "Male_p", "Female_p", "Male_Sig", "Female_Sig", "Male_logodds", "Female_logodds", "ThemeEn.x", "VarLabelEn.x", "textLabelEn.x"))
+
+df_model_genders <- df_model_genders %>% filter(Male_p <= .1 | Female_p <= .1)
+
+colnames(df_model_genders) = c('coeff_label', 'Men', 'Women','Men', 'Women','Men', 'Women','Men','Women', 'ThemeEn', 'VarLabelEn', 'TextLabelEn')
+
+df_model_genders %>%
+  kable(booktabs = T,  digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" ", "Std.Error"= 2,  "p-value"= 2, "Significant"= 2, "Logodds"= 2, " " =3)) #%>%
+
+```
+
+
+###Table 3
+```{r}
+subsetCirrhosis_df1 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ KHlz12)
+
+subsetCirrhosis_df1$propYes <- subsetCirrhosis_df1[,2]/(subsetCirrhosis_df1[,3]+subsetCirrhosis_df1[,2])
+subsetCirrhosis_df1$propNo <- subsetCirrhosis_df1[,3]/(subsetCirrhosis_df1[,3] +subsetCirrhosis_df1[,2])
+subsetCirrhosis_df1$propWBYes <- subsetCirrhosis_df1[,2]/sum(subsetCirrhosis_df1[,2])
+subsetCirrhosis_df1$propWBNo <- subsetCirrhosis_df1[,3]/sum(subsetCirrhosis_df1[,3])
+
+
+subsetCirrhosis_df1 <- subsetCirrhosis_df1 %>% rename(Yes = `1`, No = `2`)
+colnames(subsetCirrhosis_df1) <- c("GZmehm1", "Yes", "No", "Yes", "No", "Yes", "No")
+
+subsetCirrhosis_df1 %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
+  add_header_above(c(" ", "Response" = 2, "Prop. Response"= 2, "Prop. in Level"= 2)) %>%    save_kable("data/images/cirrhosispopulation.png")
+
+```
+
+###Table 4
+```{r}
+df_model_sumallsort <- df_model_sumd
+df_model_sumallsort <- df_model_sumallsort[c(1:220),]
+
+df_model_sumallsort$Logodds <- as.numeric(df_model_sumallsort$Logodds)
+df_model_sumallsort <- df_model_sumallsort[order(-df_model_sumallsort$Logodds),]
+df_model_top10most <- df_model_sumallsort[1:10,]
+rownames(df_model_top10most) <- c()
+
+df_model_top10most %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/top10most.png")
+
+```
+
+###Table 5
+```{r}
+df_model_sumallRevsort <- df_model_sumd
+df_model_sumallRevsort <- df_model_sumallRevsort[c(1:220),]
+
+df_model_sumallRevsort$Logodds <- as.numeric(df_model_sumallRevsort$Logodds)
+df_model_sumallRevsort <- df_model_sumallRevsort[order(df_model_sumallRevsort$Logodds),]
+
+df_model_top10least <- df_model_sumallRevsort[1:10,]
+rownames(df_model_top10least) <- c()
+
+
+df_model_top10least %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/top10least.png")
+```
+
+
+```{r}
+#Viewing the significance of various aspects of AGE & GENDER, which are or are not significant
+df_model_subsetAgeGender <- df_model_sumd %>% filter(str_detect(ThemeEn, "1701"))
+df_model_subsetAgeGender %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/ageandgender2.png") 
+```
+
+###Table 6
+```{r}
+subsetGender_df1 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ sex)
+subsetGender_df1$propMale <- subsetGender_df1[,2]/(subsetGender_df1[,3] + subsetGender_df1[,2])
+subsetGender_df1$propFemale <- subsetGender_df1[,3]/(subsetGender_df1[,3] + subsetGender_df1[,2])
+subsetGender_df1 <- subsetGender_df1 %>% rename(Male = `1`, Female = `2`)
+subsetGender_df1$propWBMale <- subsetGender_df1[,2]/sum(subsetGender_df1[,2])
+subsetGender_df1$propWBFemale <- subsetGender_df1[,3]/sum(subsetGender_df1[,3])
+
+colnames(subsetGender_df1) = c('GZmehm1', 'Male', 'Female','Male', 'Female','Male', 'Female')
+
+subsetGender_df1 %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
+  add_header_above(c(" ", "Population" = 2, "Prop Response "= 2, "Prop in Level" = 2)) %>% save_kable("data/images/ageandgenderpopulation.png") 
+```
+
+
+## Alcohol Subsets
+
+```{r}
+describe(df_subsetall3$AKoft12_k)
+```
+
+###Table 7 
+```{r}
+#Viewing the significance of various aspects of ALCOHOL, which are or are not significant
+df_model_subsetAlcohol <- df_model_sumd %>% filter(str_detect(ThemeEn, "1504"))
+df_model_subsetAlcohol <- df_model_subsetAlcohol %>% dplyr::select(-ThemeEn)
+
+df_model_subsetAlcohol %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/alcoholconsumptionfrequencysignificance.png")
+
+```
+
+```{r}
+subsetAlcohol_df1 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ AKoft12_k)
+subsetAlcohol_df1$propDaily <- subsetAlcohol_df1[,2]/sum(subsetAlcohol_df1[,2])
+subsetAlcohol_df1$propWeekly <- subsetAlcohol_df1[,3]/sum(subsetAlcohol_df1[,3])
+subsetAlcohol_df1$propMonthly <- subsetAlcohol_df1[,4]/sum(subsetAlcohol_df1[,4])
+subsetAlcohol_df1$propLessthanmonthly <- subsetAlcohol_df1[,5]/sum(subsetAlcohol_df1[,5])
+subsetAlcohol_df1$propNomore <- subsetAlcohol_df1[,6]/sum(subsetAlcohol_df1[,6])
+subsetAlcohol_df1$propNone <- subsetAlcohol_df1[,7]/sum(subsetAlcohol_df1[,7])
+subsetAlcohol_df1 <- subsetAlcohol_df1 %>% rename(Daily = `1`, Weekly = `2`, Monthly = `5`, LessMonthly = `7`, NoMore = `8`, None = `9`)
+
+subsetAlcohol_df1$propWBDaily <- subsetAlcohol_df1[,2]/(subsetAlcohol_df1[,2] + subsetAlcohol_df1[,3] + subsetAlcohol_df1[,4]+ subsetAlcohol_df1[,5] + subsetAlcohol_df1[,6] + subsetAlcohol_df1[,7])
+subsetAlcohol_df1$propWBWeekly <- subsetAlcohol_df1[,3]/(subsetAlcohol_df1[,2] + subsetAlcohol_df1[,3] + subsetAlcohol_df1[,4]+ subsetAlcohol_df1[,5] + subsetAlcohol_df1[,6] + subsetAlcohol_df1[,7])
+subsetAlcohol_df1$propWBMonthly <- subsetAlcohol_df1[,4]/(subsetAlcohol_df1[,2] + subsetAlcohol_df1[,3] + subsetAlcohol_df1[,4]+ subsetAlcohol_df1[,5] + subsetAlcohol_df1[,6] + subsetAlcohol_df1[,7])
+subsetAlcohol_df1$propWBLessthanmonthly <- subsetAlcohol_df1[,5]/(subsetAlcohol_df1[,2] + subsetAlcohol_df1[,3] + subsetAlcohol_df1[,4]+ subsetAlcohol_df1[,5] + subsetAlcohol_df1[,6] + subsetAlcohol_df1[,7])
+subsetAlcohol_df1$propWBNomore <- subsetAlcohol_df1[,6]/(subsetAlcohol_df1[,2] + subsetAlcohol_df1[,3] + subsetAlcohol_df1[,4]+ subsetAlcohol_df1[,5] + subsetAlcohol_df1[,6] + subsetAlcohol_df1[,7])
+subsetAlcohol_df1$propWBNone <- subsetAlcohol_df1[,7]/(subsetAlcohol_df1[,2] + subsetAlcohol_df1[,3] + subsetAlcohol_df1[,4]+ subsetAlcohol_df1[,5] + subsetAlcohol_df1[,6] + subsetAlcohol_df1[,7])
+#subsetAlcohol_df1 <- subsetAlcohol_df1 %>% rename(Daily = `1`, Weekly = `2`, Monthly = `5`, LessMonthly = `7`, NoMore = `8`, None = `9`)
+
+
+subsetAlcohol_df1 %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position")) #%>%
+ # add_header_above(c(" ", "Frequency" = 6, "Frequency Proportion"= 6, "Well-being Proportion"= 6, " " =4)) #%>%
+  #add_footnote("footnote")
+
+#(subsetAlcohol_df1[,2] + sum(subsetAlcohol_df1[,3] + sum(subsetAlcohol_df1[,4]+ sum(subsetAlcohol_df1[,5] + sum(subsetAlcohol_df1[,6] + sum(subsetAlcohol_df1[,7])
+```
+
+## Disease Subsets
+
+###Table 8
+```{r}
+#Viewing the significance of various aspects of DISEASES, which are or are not significant
+df_model_subsetDisease <- df_model_sumd %>% filter(str_detect(ThemeEn, "1101"))
+df_model_subsetDisease <- df_model_subsetDisease %>% dplyr::select(-ThemeEn)
+
+df_model_subsetDisease %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/diseasesignificance.png") #%>%
+  #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
+  #add_footnote("footnote")
+```
+
+### Table 9 
+```{r}
+#Viewing the significance of various aspects of HEALTH FOCUS AND LIMITATIONS, which are or are not significant
+df_model_subsetHealth <- df_model_sumd %>% filter(str_detect(ThemeEn, "1102"))
+
+df_model_subsetHealth %>%
+  kable(booktabs = T,  digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%        save_kable("data/images/health_focus_limitations_significance.png")
+```
+
+### Table 10
+```{r}
+subsetChronicDiseases_df1 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ GZmehm3C)
+
+subsetChronicDiseases_df1$propYes <- subsetChronicDiseases_df1[,2]/(subsetChronicDiseases_df1[,2] + subsetChronicDiseases_df1[,3])
+subsetChronicDiseases_df1$propNo <- subsetChronicDiseases_df1[,3]/(subsetChronicDiseases_df1[,2] + subsetChronicDiseases_df1[,3])
+
+subsetChronicDiseases_df1$propWBYes <- subsetChronicDiseases_df1[,2]/sum(subsetChronicDiseases_df1[,2])
+subsetChronicDiseases_df1$propWBNo <- subsetChronicDiseases_df1[,3]/sum(subsetChronicDiseases_df1[,3])
+
+subsetChronicDiseases_df1 <- subsetChronicDiseases_df1 %>% rename(Yes = `1`, No = `2`)
+colnames(subsetChronicDiseases_df1) = c('GZmehm1', 'Yes', 'No','Yes', 'No','Yes', 'No')
+
+subsetChronicDiseases_df1 %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" ", "Response" = 2, "Prop Response"= 2, "Prop in Level"= 2)) %>%        save_kable("data/images/chronic_disease_population.png")
+```
+
+###Table 11
+```{r}
+subsetChronicDiseases_df2 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ GZmehm2D)
+
+subsetChronicDiseases_df2$propStrongly <- subsetChronicDiseases_df2[,2]/(subsetChronicDiseases_df2[,2] + subsetChronicDiseases_df2[,3] + subsetChronicDiseases_df2[,4])
+subsetChronicDiseases_df2$propModerately <- subsetChronicDiseases_df2[,3]/(subsetChronicDiseases_df2[,2] + subsetChronicDiseases_df2[,3] + subsetChronicDiseases_df2[,4])
+subsetChronicDiseases_df2$propNotlimited <- subsetChronicDiseases_df2[,4]/(subsetChronicDiseases_df2[,2] + subsetChronicDiseases_df2[,3] + subsetChronicDiseases_df2[,4])
+
+subsetChronicDiseases_df2$propWBStrongly <- subsetChronicDiseases_df2[,2]/sum(subsetChronicDiseases_df2[,2])
+subsetChronicDiseases_df2$propWBModerately <- subsetChronicDiseases_df2[,3]/sum(subsetChronicDiseases_df2[,3])
+subsetChronicDiseases_df2$propWBNotlimited <- subsetChronicDiseases_df2[,4]/sum(subsetChronicDiseases_df2[,4])
+subsetChronicDiseases_df2 <- subsetChronicDiseases_df2 %>% rename(Strongly_Limited = `1`, Moderately_Restricted = `2`, Not_Limited = `3`)
+
+colnames(subsetChronicDiseases_df2) = c('GZmehm1', 'Strongly', 'Moderately', 'None', 'Strongly', 'Moderately','None', 'Strongly', 'Moderately', 'None')
+
+subsetChronicDiseases_df2 %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" ", "Degree of limitation Response" = 3, "Prop of Response"= 3, "Prop in Level"= 3)) %>% save_kable("data/images/limitation_population_table.png")
+```
+
+###Table 12
+```{r}
+#Viewing the significance of various aspects of MENTAL HEALTH, which are or are not significant
+df_model_subsetMentalHealth <- df_model_sumd %>% filter(str_detect(ThemeEn, "1301"))
+
+df_model_subsetMentalHealth %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/mental_health_significance.png")
+```
+
+
+###Table 13
+```{r}
+#Viewing the significance of various aspects of BIRTHPLACE AND CITIZENSHIP, which are or are not significant
+df_model_subsetMigration <- df_model_sumd %>% filter(str_detect(ThemeEn, "1705"))
+df_model_subsetMigration <- df_model_subsetMigration %>% dplyr::select(-ThemeEn) 
+
+df_model_subsetMigration %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)  %>%    save_kable("data/images/migration_significance.png")
+```
+
+###Table 14
+
+```{r}
+#where born subsets
+subsetgermanborn_df1 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ MIbirthplace)
+subsetgermanborn_df1$propGermany <- subsetgermanborn_df1[,2]/(subsetgermanborn_df1[,2] + subsetgermanborn_df1[,3] + subsetgermanborn_df1[,4])
+subsetgermanborn_df1$propEU <- subsetgermanborn_df1[,3]/(subsetgermanborn_df1[,2] + subsetgermanborn_df1[,3] + subsetgermanborn_df1[,4])
+subsetgermanborn_df1$propNonEU <- subsetgermanborn_df1[,4]/(subsetgermanborn_df1[,2] + subsetgermanborn_df1[,3] + subsetgermanborn_df1[,4])
+
+subsetgermanborn_df1$propWBGermany <- subsetgermanborn_df1[,2]/sum(subsetgermanborn_df1[,2])
+subsetgermanborn_df1$propWBEU <- subsetgermanborn_df1[,3]/sum(subsetgermanborn_df1[,3])
+subsetgermanborn_df1$propWBNonEU <- subsetgermanborn_df1[,4]/sum(subsetgermanborn_df1[,4])
+
+subsetgermanborn_df1 <- subsetgermanborn_df1 %>% rename(Germany = `10`, Other_EU_Country = `21`, Non_EU_Country = `22`)
+
+colnames(subsetgermanborn_df1) = c('GZmehm1', 'Germany', 'EU', 'Non_EU', 'Germany', 'EU', 'Non_EU',  'Germany', 'EU', 'Non_EU')
+
+subsetgermanborn_df1 %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
+  add_header_above(c(" ", "Where Born Response" = 3, "Prop Response"= 3, "Prop in Level" = 3))  %>%    save_kable("data/images/birthplace_population_table.png")
+  #add_footnote("footnote")
+```
+
+## Table 15
+```{r}
+#citizen subsets
+subsetgermancitizen_df1 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ MIcitizen)
+
+subsetgermancitizen_df1$propGermany <- subsetgermancitizen_df1[,2]/(subsetgermancitizen_df1[,2] + subsetgermancitizen_df1[,3] + subsetgermancitizen_df1[,4])
+subsetgermancitizen_df1$propEU <- subsetgermancitizen_df1[,3]/(subsetgermancitizen_df1[,2] + subsetgermancitizen_df1[,3] + subsetgermancitizen_df1[,4])
+subsetgermancitizen_df1$propNonEU <- subsetgermancitizen_df1[,4]/(subsetgermancitizen_df1[,2] + subsetgermancitizen_df1[,3] + subsetgermancitizen_df1[,4])
+
+subsetgermancitizen_df1$propWBGermany <- subsetgermancitizen_df1[,2]/sum(subsetgermancitizen_df1[,2])
+subsetgermancitizen_df1$propWBEU <- subsetgermancitizen_df1[,3]/sum(subsetgermancitizen_df1[,3])
+subsetgermancitizen_df1$propWBNonEU <- subsetgermancitizen_df1[,4]/sum(subsetgermancitizen_df1[,4])
+
+subsetgermancitizen_df1 <- subsetgermancitizen_df1 %>% rename(Germany = `10`, Other_EU_Country = `21`, Non_EU_Country = `22`)
+
+colnames(subsetgermancitizen_df1) = c('GZmehm1', 'German', 'EU', 'Non_EU', 'German', 'EU', 'Non_EU',  'German', 'EU', 'Non_EU')
+
+subsetgermancitizen_df1 %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
+  add_header_above(c(" ", "Citizenship Reponse" = 3, "Prop Response"= 3, "Proportion in   Level" = 3)) %>% 
+  save_kable("data/images/citizenship_population_table.png")
+
+```
+
+
+##Table 16 Personal theme that include household structure and BMI
+```{r}
+#Viewing the significance of various aspects of HOUSEHOLD STRUCTURE AND BMI, which are or are not significant
+df_model_subsetPersData <- df_model_sumd %>% filter(str_detect(ThemeEn, "1702"))
+df_model_subsetPersData <- df_model_subsetPersData %>% dplyr::select(-ThemeEn)  
+
+df_model_subsetPersData %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/household_BMI_significance.png")
+```
+
+
+###Table 17 
+```{r}
+#Viewing the significance of various aspects of QUALITY OF LIFE, which are or are not significant
+df_model_subsetQOL <- df_model_sumd %>% filter(str_detect(ThemeEn, "1109"))
+df_model_subsetQOL <- df_model_subsetQOL %>% dplyr::select(-ThemeEn)
+df_model_subsetQOL %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/QOL_significance_table.png")
+```
+
+###Table 18 
+```{r}
+subsetQOLIntensity_df1 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ LQsf367C)
+
+subsetQOLIntensity_df1$propNoPain <- subsetQOLIntensity_df1[,2]/(subsetQOLIntensity_df1[,7] + subsetQOLIntensity_df1[,2] +subsetQOLIntensity_df1[,3] +subsetQOLIntensity_df1[,4] + subsetQOLIntensity_df1[,5] + subsetQOLIntensity_df1[,6])
+subsetQOLIntensity_df1$propVeryLightPain <- subsetQOLIntensity_df1[,2]/(subsetQOLIntensity_df1[,7] + subsetQOLIntensity_df1[,2] +subsetQOLIntensity_df1[,3] +subsetQOLIntensity_df1[,4] + subsetQOLIntensity_df1[,5] + subsetQOLIntensity_df1[,6])
+subsetQOLIntensity_df1$propLightPain <- subsetQOLIntensity_df1[,3]/(subsetQOLIntensity_df1[,7] + subsetQOLIntensity_df1[,2] +subsetQOLIntensity_df1[,3] +subsetQOLIntensity_df1[,4] + subsetQOLIntensity_df1[,5] + subsetQOLIntensity_df1[,6])
+subsetQOLIntensity_df1$propModeratePain <- subsetQOLIntensity_df1[,4]/(subsetQOLIntensity_df1[,7] + subsetQOLIntensity_df1[,2] +subsetQOLIntensity_df1[,3] +subsetQOLIntensity_df1[,4] + subsetQOLIntensity_df1[,5] + subsetQOLIntensity_df1[,6])
+subsetQOLIntensity_df1$propStrongPain <- subsetQOLIntensity_df1[,5]/(subsetQOLIntensity_df1[,7] + subsetQOLIntensity_df1[,2] +subsetQOLIntensity_df1[,3] +subsetQOLIntensity_df1[,4] + subsetQOLIntensity_df1[,5] + subsetQOLIntensity_df1[,6])
+subsetQOLIntensity_df1$propVeryStrongPain <- subsetQOLIntensity_df1[,6]/(subsetQOLIntensity_df1[,7] + subsetQOLIntensity_df1[,2] +subsetQOLIntensity_df1[,3] +subsetQOLIntensity_df1[,4] + subsetQOLIntensity_df1[,5] + subsetQOLIntensity_df1[,6])
+
+subsetQOLIntensity_df1$propWBNoPain <- subsetQOLIntensity_df1[,2]/sum(subsetQOLIntensity_df1[,2])
+subsetQOLIntensity_df1$propWBVeryLightPain <- subsetQOLIntensity_df1[,2]/sum(subsetQOLIntensity_df1[,2])
+subsetQOLIntensity_df1$propWBLightPain <- subsetQOLIntensity_df1[,3]/sum(subsetQOLIntensity_df1[,3])
+subsetQOLIntensity_df1$propWBModeratePain <- subsetQOLIntensity_df1[,4]/sum(subsetQOLIntensity_df1[,4])
+subsetQOLIntensity_df1$propWBStrongPain <- subsetQOLIntensity_df1[,5]/sum(subsetQOLIntensity_df1[,5])
+subsetQOLIntensity_df1$propWBVeryStrongPain <- subsetQOLIntensity_df1[,6]/sum(subsetQOLIntensity_df1[,6]) 
+
+subsetQOLIntensity_df1 <- subsetQOLIntensity_df1 %>% rename(No_Pain = `1`, Light_Pain = `2`, Very_Light_Pain = `3`, Moderate_Pain =`4`, Strong_Pain =`5`, Very_Strong_Pain =`6`)
+
+colnames(subsetQOLIntensity_df1) = c('GZmehm1', 'None', 'V_Light','Light', 'Moderate','Strong', 'V_Strong', 'None', 'V_Light','Light', 'Moderate','Strong', 'V_Strong','None', 'V_Light','Light', 'Moderate','Strong', 'V_Strong' )
+
+subsetQOLIntensity_df1 %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" ", "Pain Intensity Response" = 6, "Prop Response"= 6, "Prop in Level" = 6)) %>%    save_kable("data/images/pain_population_table.png")
+```
+
+###Table 19 
+```{r}
+#Viewing the significance of various aspects of SMOKING, which are or are not significant
+df_model_subsetSmoking <- df_model_sumd %>% filter(str_detect(ThemeEn, "1505"))
+df_model_subsetSmoking <- df_model_subsetSmoking%>% dplyr::select(-ThemeEn)
+
+df_model_subsetSmoking %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/smoking_significance_table.png") 
+```
+
+###Table 20
+```{r}
+subsetsmoke_df1 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ RCstat)
+
+subsetsmoke_df1$propDaily <- subsetsmoke_df1[,2]/(subsetsmoke_df1[,2] + subsetsmoke_df1[,3] + subsetsmoke_df1[,4] + subsetsmoke_df1[,5])
+subsetsmoke_df1$propOcc <- subsetsmoke_df1[,3]/(subsetsmoke_df1[,2] + subsetsmoke_df1[,3] + subsetsmoke_df1[,4] + subsetsmoke_df1[,5])
+subsetsmoke_df1$propQuit <- subsetsmoke_df1[,4]/(subsetsmoke_df1[,2] + subsetsmoke_df1[,3] + subsetsmoke_df1[,4] + subsetsmoke_df1[,5])
+subsetsmoke_df1$propNeverSmoked <- subsetsmoke_df1[,5]/(subsetsmoke_df1[,2] + subsetsmoke_df1[,3] + subsetsmoke_df1[,4] + subsetsmoke_df1[,5])
+
+subsetsmoke_df1$propWBDaily <- subsetsmoke_df1[,2]/sum(subsetsmoke_df1[,2])
+subsetsmoke_df1$propWBOcc <- subsetsmoke_df1[,3]/sum(subsetsmoke_df1[,3])
+subsetsmoke_df1$propWBQuit <- subsetsmoke_df1[,4]/sum(subsetsmoke_df1[,4])
+subsetsmoke_df1$propWBNeverSmoked <- subsetsmoke_df1[,5]/sum(subsetsmoke_df1[,5])
+
+subsetsmoke_df1 <- subsetsmoke_df1 %>% rename(Daily = `1`, Occasionally = `2`, Quit = `3`, Neversmoked = `4`)
+
+colnames(subsetsmoke_df1) = c('GZmehm1', 'Daily', 'Occ','Quit', 'Never','Daily', 'Occ','Quit', 'Never', 'Daily', 'Occ','Quit', 'Never')
+
+subsetsmoke_df1 %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" ", "Smoking Status Response" = 4, "Prop Response"= 4, "Prop in Level" = 4)) %>%    save_kable("data/images/smoking_population_table.png") 
+```
+
+### Table 21 Insurance and medical tests
+```{r}
+#Viewing the significance of various aspects of TYPE OF HEALTH INSURANCE AND PRIOR MEDICAL TEST RESULTS, which are or are not significant
+df_model_subsetUse <- df_model_sumd %>% filter(str_detect(ThemeEn, "1401"))
+df_model_subsetUse <- df_model_subsetUse %>% dplyr::select(-ThemeEn)
+df_model_subsetUse <- df_model_subsetUse %>% filter(p_value <= .1)
+
+df_model_subsetUse %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/insurance_tests_table.png")
+```
+
+```{r}
+#blood fat test no heart issues ( IAcholus )
+df_subset_bloodfat12 <- df_subsetall3
+df_subset_bloodfat12$ProactiveBFMonitor <- ifelse(df_subset_bloodfat12$IAcholus == 1 & df_subset_bloodfat12$KHmyo12 == 1 | df_subset_bloodfat12$KHkhk12 == 1 | df_subset_bloodfat12$KHhi12==1 | df_subset_bloodfat12$KHsa12 == 1, 2,1)
+
+
+df_subset_BFnoProb <- filter(df_subset_bloodfat12, ProactiveBFMonitor == "1")
+df_subset_BFwithProb <- filter(df_subset_bloodfat12, ProactiveBFMonitor == "2")
+```
+
+```{r}
+subsetbloodfat12_df1 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ IAcholus)
+
+subsetbloodfat12_df1$proplast12 <- subsetbloodfat12_df1[,2]/sum(subsetbloodfat12_df1[,2])
+subsetbloodfat12_df1$prop1to3 <- subsetbloodfat12_df1[,3]/sum(subsetbloodfat12_df1[,3])
+subsetbloodfat12_df1$prop3to5 <- subsetbloodfat12_df1[,4]/sum(subsetbloodfat12_df1[,4])
+subsetbloodfat12_df1$propmorethan5 <- subsetbloodfat12_df1[,5]/sum(subsetbloodfat12_df1[,5])
+subsetbloodfat12_df1$propNever <- subsetbloodfat12_df1[,6]/sum(subsetbloodfat12_df1[,6])
+```
+
+### Table 22
+```{r}
+subsetbloodfat12_df2 <- reshape2::dcast(df_subset_bloodfat12, GZmehm1 ~ ProactiveBFMonitor)
+
+subsetbloodfat12_df2$propYes <- subsetbloodfat12_df2[,2]/(subsetbloodfat12_df2[,2] + subsetbloodfat12_df2[,3])
+subsetbloodfat12_df2$propNo <- subsetbloodfat12_df2[,3]/(subsetbloodfat12_df2[,2] + subsetbloodfat12_df2[,3])
+
+subsetbloodfat12_df2$propWBYes <- subsetbloodfat12_df2[,2]/sum(subsetbloodfat12_df2[,2])
+subsetbloodfat12_df2$propWBNo <- subsetbloodfat12_df2[,3]/sum(subsetbloodfat12_df2[,3])
+
+colnames(subsetbloodfat12_df2) <- c("GZmehm1", "Yes", "No", "Yes", "No", "Yes", "No")
+
+subsetbloodfat12_df2 %>%
+  kable(booktabs = T, digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
+  add_header_above(c(" ", "Proactive Blood Fat Response" = 2, "Prop Response" = 2, "Prop in Level" = 2)) %>%    save_kable("data/images/proactive_blood_fat_population_table.png")
+```
+```{r}
+magick::image_read()
+```
+
+
+
+
+
+
+
+
+
+
+
