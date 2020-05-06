@@ -45,6 +45,8 @@ library(webshot)
 # library(readstata13)
 # library(performanceEstimation)
 
+dir.create("charts")
+
 ```
 
 # Objective
@@ -54,16 +56,23 @@ The purpose of this analysis is to understand and quantify the different drivers
 The response variable GZmehm1 is a rating of individual wellbeing on a 5-step scale 1= very bad | 5=very good. 
 
 ```{r, echo=F}
-load(file = "data/geda_data.RData")
+load(file = "../analysis/data/geda_data.RData")
 hist(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1), breaks=.5:5.5, main="Histogram of the wellbeing score (response)", xlab="1=very bad | 5=very good")
 ```
 
 
 ```{r, echo=F}
 # Import data dictionary / meta data of responses
+# There needs to be the two of the following dataframes, one meta data is used for casting of data types, the other for joining to display meta data on kables
 
-df_meta_lvls <- read_excel("data.doc/GEDA14_Variablenuebersicht_Analyse.xlsx", sheet='levels')
+df_meta_lvls <- read_excel("../analysis/data.doc/GEDA14_Variablenuebersicht_Analyse_VarPrep.xlsx", sheet='levels')
 df_meta_lvls$numLevel <- as.numeric(df_meta_lvls$numLevel)
+
+df_meta_lvls_all_for_join <- df_meta_lvls
+df_meta_lvls_all_for_join[is.na(df_meta_lvls_all_for_join$numLevel),]$numLevel = ""
+
+df_meta_lvls <- df_meta_lvls[df_meta_lvls$IsUsedForCasting == 1,]
+
 ```
 
 # Feature engineering: 
@@ -651,6 +660,7 @@ variance_factors_test3 <- vif(lm_test3)
 variance_factors_test3[variance_factors_test3>9]
 ```
 
+## Parallel slopes assumption validation
 
 Our goal here is to run separate binary logistic regressions for different levels of the target variable (4 regressions if you have 5 levels), and see that the slopes are similar in all 4. The intercepts can be very different, that is consistent with the proportional odds model.
 ```{r}
@@ -729,8 +739,8 @@ for (i in colnames(df_base_char)){
 ```
 
 ```{r, echo=F, eval=F}
-write.csv(df_base, "df_base_numeric.csv", row.names=FALSE)
-write.csv(df_base_char, "df_base_char.csv", row.names=FALSE)
+# write.csv(df_base, "df_base_numeric.csv", row.names=FALSE)
+# write.csv(df_base_char, "df_base_char.csv", row.names=FALSE)
 ```
 
 Causal Analysis: Propensity Score Matching
@@ -796,13 +806,22 @@ dta_m_numeric$PAhhtype <- as.numeric(dta_m_numeric$PAhhtype)
 
 mean_check_var <- c("sex","GZmehm1","RCstat","bula","PAhhtype")
 
-#Checking to see the means are close to each other
-dta_m_numeric %>%
+df_tmp_mean_diff <- dta_m_numeric %>%
   group_by(IAarzt1B) %>% 
   dplyr :: select(one_of(mean_check_var)) %>%
-  summarise_all(funs(mean)) %>%
-  kable() %>%
+  summarise_all(funs(mean))
+
+colnames(df_tmp_mean_diff) = c('IAarzt1B', 'Sex', 'GZmehm1','Smoking', 'State','PAhhtype')
+
+#Checking to see the means are close to each other
+t <- df_tmp_mean_diff %>%
+  kable(booktabs = T, digits = 4, "latex") %>%
   kable_styling()
+
+save_kable(t, "./charts/PSM_comparing_means.png")
+
+t %>% as_image()
+
 ```
 
 Estimating treatment effects
@@ -1118,15 +1137,15 @@ theme_medicines[order(-theme_medicines$importance),] %>% kable() %>% kable_styli
 
 
 
-mlm <- nnet(GZmehm1 ~ ., data = trainingData,family="multinomial",size = 5574900,MaxNWts =10000000)
+# mlm <- nnet(GZmehm1 ~ ., data = trainingData,family="multinomial",size = 5574900,MaxNWts =10000000)
 
 
 
 # mlm <- multinom(GZmehm1 ~ ., data = trainingData)
 
-M1 <- logLik(m)
-M2 <- logLik(mlm)
-(G <- -2*(M1[1] - M2[1]))
+# M1 <- logLik(m)
+# M2 <- logLik(mlm)
+# (G <- -2*(M1[1] - M2[1]))
 
 
 # run chi-squared test
@@ -1135,7 +1154,7 @@ M2 <- logLik(mlm)
 # @Interpret Chi-squared P-value -> high = the fit of both models is different from one another.
 
 
-pchisq(G,3,lower.tail = FALSE)
+# pchisq(G,3,lower.tail = FALSE)
 ```
 
 ## Create meta data for the chatbot
@@ -1153,102 +1172,64 @@ df_bot_cols
 ```{r}
 #read in the life expectancy table from #https://ec.europa.eu/eurostat/data/database?node_code=demo_mlexpec this provides the lifexpectancy for each German state broken down by age, year and gender. 
 R_lifeexp <- read_tsv("../analysis/data/demo_r_mlifexp.tsv")
-```
 
-
-```{r}
 #initial data set first column is an aggregation of Units (years), Sex (abbreviation), age (years of life, i.e. YR1 equals a 1 year old), and region (assigned NUTS-2 code for each state in Europe)
 R_lifeexp <- R_lifeexp %>% separate(colOne , into = c("unit", "sex", "age", "region"), sep = ",")
-```
 
-```{r}
 #extract only the those sections that are "DE" for Germany
 R_LE_DE <- subset(R_lifeexp, grepl("DE", R_lifeexp$region) )
 #Further extract only the 3 digit german states according to NUTS-2
 R_LE_DE <- subset(R_LE_DE, nchar(region) == 3)
 R_LE_DE$age <- substring(R_LE_DE$age, 2)
 R_LE_DE$AgeBin <- NA
-```
 
-
-```{r}
 #convert all "_GE85" to 85 as these people are all 85 or older
 R_LE_DE <- mutate(R_LE_DE, age = ifelse(age == "_GE85", "85", age))
-```
 
-```{r}
 # convert all values of "_LT1" to 0 as these are people whose age is less than 1 year old
-R_LE_DE <- mutate(R_LE_DE, age = ifelse(age == "_LT1", "0", age))                               
-```
+R_LE_DE <- mutate(R_LE_DE, age = ifelse(age == "_LT1", "0", age))   
 
-```{r}
 #Convert age to number as this is needed to reassign to age bins
 R_LE_DE$age <- as.numeric(R_LE_DE$age)
 #Drop all ages below 15 since Robert koch only uses 15 years old and up
 R_LE_DE <- subset(R_LE_DE, age > 14)
-```
 
-```{r}
 #move AgeBin to the front as it is easier to verify other changes this way
 R_LE_DE<-R_LE_DE[,c(33, 1:32)]
-```
 
-
-```{r}
 #if else to assign ages to bins
 R_LE_DE <- mutate(R_LE_DE, AgeBin = ifelse(age >14 & age <20, 1, ifelse(age >19 & age <25, 2, ifelse(age > 24 & age < 30, 3, ifelse(age > 29 & age < 35, 4, ifelse(age >34 & age <40, 5, ifelse(age > 39 & age < 45, 6, ifelse(age > 44 & age < 50, 7, ifelse(age > 49 & age < 55, 8, ifelse(age > 54 & age < 60, 9, ifelse(age > 59 & age < 65, 10, ifelse(age > 64 & age < 70, 11,ifelse(age > 69 & age < 75, 12, ifelse(age > 74 & age < 80, 13,  ifelse(age > 79 & age < 85, 14, 15)))))))))))))))
-```
 
-```{r}
 #Drop all years except those in which the Robert Koch data covers 2014, 2015
 R_LE_DE <- R_LE_DE[,c(1:5, 8:9)]
 names(R_LE_DE) <- c("AgeBin", "Unit", "Sex", "Age", "Region", "Y2015", "Y2014")
-```
 
-```{r}
-#Assign factor numbers the same as they are assigned in the "df_geda_num" dataframe 
-R_LE_DE <- mutate(R_LE_DE, Region = ifelse(Region == "DE1", 8, ifelse(Region== "DE2", 9, ifelse(Region == "DE3", 11, ifelse(Region == "DE4", 12, ifelse(Region == "DE5",4,ifelse(Region == "DE6", 2, ifelse(Region == "DE7", 6, ifelse(Region == "DE8", 13, ifelse(Region == "DE9", 3, ifelse(Region == "DEA", 5,ifelse(Region == "DEB", 7, ifelse(Region == "DEC", 10, ifelse(Region == "DED", 14, ifelse(Region == "DEE", 15, ifelse(Region == "DEF", 1, ifelse(Region == "DEG", 16, Region)))))))))))))))))
-```
-
-```{r}
 #To create other charts it is also easier to reassign territories by their name for easier explanation
 R_LE_DEPPT <- mutate(R_LE_DE, Region = ifelse(Region == 8, "BADEN-W?RTTEMBERG", ifelse(Region== 9, "BAVARIA",  ifelse(Region == 11, "BERLIN",  ifelse(Region == 12, "BRANDENBERG",  ifelse(Region == 4, "BREMEN",ifelse(Region == 2, "HAMBURG",  ifelse(Region ==  6, "HESSEN", ifelse(Region == 13, "MECKLENBERG-VORPOMMERN",  ifelse(Region == 3, "LOWER SAXONY",  ifelse(Region == 5, "NORTH RHINE-WESTPHALIA", ifelse(Region == 7, "RHEINLAND-PALATINATE",  ifelse(Region == 10, "SAARLAND",  ifelse(Region == 14, "SAXONY",  ifelse(Region == 15, "SAXONY-ANHALT",  ifelse(Region == 1,"SCHLESWIG-HOLSTEIN", ifelse(Region == 16, "THURINGIA",  Region)))))))))))))))))
-```
 
+#Assign factor numbers the same as they are assigned in the "df_geda_num" dataframe 
+R_LE_DE <- mutate(R_LE_DE, Region = ifelse(Region == "DE1", 8, ifelse(Region== "DE2", 9, ifelse(Region == "DE3", 11, ifelse(Region == "DE4", 12, ifelse(Region == "DE5",4,ifelse(Region == "DE6", 2, ifelse(Region == "DE7", 6, ifelse(Region == "DE8", 13, ifelse(Region == "DE9", 3, ifelse(Region == "DEA", 5,ifelse(Region == "DEB", 7, ifelse(Region == "DEC", 10, ifelse(Region == "DED", 14, ifelse(Region == "DEE", 15, ifelse(Region == "DEF", 1, ifelse(Region == "DEG", 16, Region)))))))))))))))))
 
-```{r}
 # The Europa dataset life expectancy columns provide remaining years for each age, therefore to get a total life expectancy we add the current agebin to remaining years. since the Robert Koch data covers a two year period the agebin and remaining years are added for both years.
 R_LE_DE$LifeExp.2015 <- R_LE_DE$Age + as.numeric(R_LE_DE$Y2015)
 R_LE_DE$LifeExp.2014 <- R_LE_DE$Age + as.numeric(R_LE_DE$Y2014)
 R_LE_DE <- R_LE_DE[,c(1:5, 8:9)]
-```
 
-```{r}
 #transform the dataframe from wide to long (pivot on year)
 R_LE_DE <- reshape2::melt(R_LE_DE, id.vars = c("AgeBin", "Unit", "Sex", "Age", "Region"))
 names(R_LE_DE) <- c("AgeBin", "Unit", "Sex", "Age", "Region", "Year", "LifeExp")
 R_LE_DE$Year <- sub("LifeExp.", "", R_LE_DE$Year) 
-```
 
-
-```{r}
 #Convert sex factor to the same factor as "df_geda_num" numbering system, females are 1 males are 2 and total is 3. The three will be dropped later in the process when joined to the original "df_geda_num" to create the new dataframe of "df_geda_LifeExp"
 R_LE_DE <- mutate(R_LE_DE, Sex = ifelse(Sex == "F", 2, ifelse(Sex== "M", 1, 3)))
-```
 
-
-```{r}
 #create a unique ID column for each row including the agebin(AB)+age bin values + Sex(S) + sex values, etc thru region and year. 
 R_LE_DE$JoinFac <- paste("AB", R_LE_DE$AgeBin, "S", R_LE_DE$Sex, "R", R_LE_DE$Region, "Y", R_LE_DE$Year, sep = "")
-```
 
-```{r}
 #the previous R chunk creates duplicates since the bins are in fact 5 ages each with slightly different life expectancies. Current life expectancy methodologies aggregate the data and provide the mean life expectancy when binned. The following two lines of code create a mean for each bin. 
 R_LE_DE <- aggregate(R_LE_DE$LifeExp, list(R_LE_DE$JoinFac), mean)
 names(R_LE_DE) <- c("JoinFac", "LifeExp")
-```
 
-```{r}
 #Robert Koch institute list 90 plus but the available life expectancy groups those above 85 together. This duplicates the rows for 85 year olds and carries it to the next age bin. 
 R_LE_DE90 <- R_LE_DE
 R_LE_DE90$JF4 <- stri_sub(R_LE_DE90$JoinFac, seq(1, 4,by=4), length=4)
@@ -1256,39 +1237,26 @@ R_LE_DE90$JFRest <- substring(R_LE_DE90$JoinFac, 4)
 R_LE_DE90 <- subset(R_LE_DE90, JF4 == "AB15")
 R_LE_DE90$JoinFac <- gsub("AB15", "AB16", R_LE_DE90$JoinFac)
 R_LE_DE90 <- R_LE_DE90[,1:2]
-```
 
-```{r}
 #join the duplicated rows for 90 years old to the original life expectancy dataframe
 R_LE_DE <- bind_rows(R_LE_DE, R_LE_DE90)
-```
 
-```{r}
 #duplicate df_geda_num dataframe as df_geda_num2 in order to not manipulate the original dataframe
 df_geda_num2 <- df_geda_num
 #create unique ID row for "df_geda_num2"
 df_geda_num2$JoinFac <- paste("AB", df_geda_num2$age5B, "S", df_geda_num2$sex, "R", df_geda_num2$bula, "Y", df_geda_num2$untj, sep = "")
 #bring the unique ID column to the front of the dataframe
 df_geda_num2 <- df_geda_num2[,c(270, 1:269)]
-```
 
-```{r}
 #join the life expectancy table R_LE_DE to the df_geda_num2 dataframe, new dataframe "df_geda_LifeExp" is a duplicate of df_geda_num with life expectancy added
 df_geda_LifeExp <- inner_join(df_geda_num2, R_LE_DE, by = c("JoinFac" = "JoinFac" ))
 
-```
-
-
-```{r}
 #Trim down dataframe to eliminate forced NA that were resulting from entire dataframe
 df_geda_LifeExp2 <- df_geda_LifeExp %>% dplyr::select(c(LifeExp, GZmehm1, age5B, sex))
 
-```
-
-
-```{r}
 score_life_Exp <- lm(LifeExp ~ as.numeric(GZmehm1) * as.numeric(age5B) * as.numeric(sex), df_geda_LifeExp2)
 summary(score_life_Exp)
+
 ```
 
 
@@ -1572,9 +1540,7 @@ df_subsetall2$ENobstBz1 <- as.numeric(df_subsetall2$ENobstBz1)
 
 # deselect the question 
 df_subsetall2<- df_subsetall2 %>% dplyr::select(-ENobstB)
-```
 
-```{r}
 df_subsetall2[df_subsetall2$ENgemB == 2 & !is.na(df_subsetall2$ENgemBz1),]$ENgemBz1 = round(5/7,2)
 df_subsetall2[df_subsetall2$ENgemB == 3 & !is.na(df_subsetall2$ENgemBz1),]$ENgemBz1 = round(2/7,2)
 df_subsetall2[df_subsetall2$ENgemB == 4 & !is.na(df_subsetall2$ENgemBz1),]$ENgemBz1 = round(1/7,2)
@@ -1584,62 +1550,46 @@ df_subsetall2$ENgemBz1 <- as.numeric(df_subsetall2$ENgemBz1)
 
 # deselect the question 
 df_subsetall2<- df_subsetall2 %>% dplyr::select(-ENgemB)
-```
 
-```{r}
 df_subsetall2[(df_subsetall2$SDbild1D == 8 | df_subsetall2$SDbild1D == 1 | df_subsetall2$SDbild1D == 2 | df_subsetall2$SDbild1D == 3) & !is.na(df_subsetall2$SDbild1D),]$SDbild1D <- 2
 df_subsetall2[(df_subsetall2$SDbild1D == 3 | df_subsetall2$SDbild1D == 4 | df_subsetall2$SDbild1D == 5) & !is.na(df_subsetall2$SDbild1D) ,]$SDbild1D <- 5
 df_subsetall2[(df_subsetall2$SDbild1D == 6 | df_subsetall2$SDbild1D == 7) & !is.na(df_subsetall2$SDbild1D) ,]$SDbild1D <- 7
 
 df_subsetall2$SDbild1D <- drop.levels(df_subsetall2$SDbild1D)
-```
 
-```{r}
 df_subsetall2[df_subsetall2$KAspodauC_k == '-96' & !is.na(df_subsetall2$KAspodauC_k),]$KAspodauC_k <- 0
 
 df_subsetall2$KAspodauC_k <- as.numeric(df_subsetall2$KAspodauC_k)
-```
 
-```{r}
 df_subsetall2$AUarbzD_k <- as.numeric(df_overall$AUarbzD_k)
-```
 
-```{r}
 df_subsetall2[(df_subsetall2$IPtet_lz == '-96' | df_subsetall2$IPtet_lz == '-95' ) & !is.na(df_subsetall2$IPtet_lz),]$IPtet_lz <- NA
-```
 
-```{r}
 df_subsetall2[df_subsetall2$IAarzt1B4w == '-96' & !is.na(df_subsetall2$IAarzt1B4w),]$IAarzt1B4w <- 0
 
 df_subsetall2$IAarzt1B4w <- as.numeric(df_subsetall2$IAarzt1B4w)
-```
 
-```{r}
 df_subsetall2[df_subsetall2$IAfa4w == '-96' & !is.na(df_subsetall2$IAfa4w),]$IAfa4w <- 0
 
 df_subsetall2$IAfa4w <- as.numeric(df_subsetall2$IAfa4w)
-```
 
-```{r}
 df_subsetall2$IAkhs_k <- as.numeric(df_subsetall2$IAkhs_k)
-```
 
-```{r}
 df_subsetall2$flagHadAccident <-  ifelse( is.na(df_subsetall2$UVartverkehr) & is.na(df_subsetall2$UVarthaus) & is.na(df_subsetall2$UVartfreiz) & is.na(df_subsetall2$UVarbeit1), NA, 
         
         ifelse(df_subsetall2$UVartverkehr == 1 | df_subsetall2$UVarthaus == 1 |df_subsetall2$UVartfreiz == 1 |df_subsetall2$UVarbeit1 == 1 , 
 1,0))
 
 df_subsetall2$flagHadAccident <- factor(df_subsetall2$flagHadAccident)
-```
 
-```{r}
 col_meta <- df_meta_lvls[df_meta_lvls$Varname == 'GZmehm1',]
 
 df_subsetall2$GZmehm1 <- ordered(df_subsetall2$GZmehm1, levels=col_meta[order(col_meta$numLevel),]$numLevel, labels=col_meta[order(col_meta$numLevel),]$numLevel)
 
 describe(df_subsetall2$GZmehm1)
+
 ```
+
 
 ```{r}
 curr_cols2 <- c(
@@ -1818,12 +1768,6 @@ df_model_sumt <- df_model_sumt %>% dplyr::rename(coeff_label = rn)
 df_model_sumt <- df_model_sumt %>% left_join((df_meta_lvls %>% dplyr::select(c(coeff_label, ThemeEn, Varname, VarLabelEn, textLabelEn))), by="coeff_label")
 df_model_sumt <- df_model_sumt %>% rename(Training_value = Value, Training_Std.Error = `Std. Error`, Training_T.Value = `t value`, Training_p = p, Training_Sig = sig_col, Training_logodds = logodds)
 
-#library(kableExtra)
-
-df_model_sumt %>%
-  kable(booktabs = T,  digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)
-
 ```
 
 ###Full Dataset polr model
@@ -1848,15 +1792,53 @@ df_model_sumd$sig_col <- ifelse(df_model_sumd$p < 0.001,'***',ifelse(df_model_su
 
 df_model_sumd$logodds <- format(exp(df_model_sumd$Value), trim = TRUE, digits = 3, scientific = F)
 
-df_meta_lvls$coeff_label <- paste0(df_meta_lvls$Varname,df_meta_lvls$numLevel)
+
+df_meta_lvls_all_for_join$coeff_label <- paste0(df_meta_lvls_all_for_join$Varname,df_meta_lvls_all_for_join$numLevel)
+
+
 df_model_sumd <- setDT(df_model_sumd, keep.rownames = TRUE)[]
 df_model_sumd <- df_model_sumd %>% dplyr::rename(coeff_label = rn)
-df_model_sumd <- df_model_sumd %>% left_join((df_meta_lvls %>% dplyr::select(c(coeff_label, ThemeEn, Varname, VarLabelEn, textLabelEn))), by="coeff_label")
+df_model_sumd <- df_model_sumd %>% left_join((df_meta_lvls_all_for_join %>% dplyr::select(c(coeff_label, ThemeEn, Varname, VarLabelEn, textLabelEn))), by="coeff_label")
 df_model_sumd <- df_model_sumd %>% rename(Full_value = Value, Full_Std.Error = `Std. Error`, Full_T.Value = `t value`, Full_p = p, Full_Sig = sig_col, Full_logodds = logodds)
 
-df_model_sumd %>%
-  kable(booktabs = T, digits = 4 ) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)
+df_model_sumd
+
+df_sum_chart <- df_model_sumd %>% dplyr::select(c("Varname" , "VarLabelEn", "textLabelEn", "Full_Sig", "Full_value", "Full_Std.Error", "Full_p", "Full_logodds"))
+
+colnames(df_sum_chart) = c('', 'Label', 'Answer','Sig', 'Coefficient', 'Std. Err.','P.Value', "Logodds")
+
+df_sum_chart[is.na(df_sum_chart$Answer),]$Answer <- ""
+
+itt <- 1
+start_row <- 1
+batch_size <- 35
+
+end_row <- batch_size
+
+for (i in 1:round(nrow(df_sum_chart)/batch_size)){
+  
+  if (end_row > nrow(df_sum_chart)){
+    end_row <- nrow(df_sum_chart)
+  }
+  
+  print(i)
+    
+  t <- df_sum_chart[start_row:end_row,] %>%
+    kable(booktabs = T,  digits = 4, "latex",row.names=FALSE) %>%  
+    kable_styling(latex_options="scale_down",font_size=10) %>% column_spec(1:1, width = "2cm") %>% 
+    column_spec(2:3, width = "5cm") %>% 
+    column_spec(4:4, width = "1cm") %>% 
+    column_spec(5:9, width = "2cm")
+  
+  save_kable(t, paste0("./charts/model_summary_", itt, ".png"))
+
+  
+  start_row <- start_row + batch_size
+  end_row <- end_row + batch_size
+  
+  itt <- itt + 1
+}
+
 
 ```
 
@@ -1898,49 +1880,43 @@ df_model_sumd2 %>%
 
 
 ```{r}
-#Recreation of the significance for each variable theme, recreation of file titled 2.7_stat_sig_var.csv based on the significance in the full dataset model. 
-df_modelsig <- reshape2::dcast(df_model_sumd, ThemeEn ~ Sig)
-df_modelsig$significant <- (df_modelsig$`*` + df_modelsig$`**` + df_modelsig$`***` + df_modelsig$.)
-df_modelsig <- df_modelsig %>% rename(Not_significant = Var.2)
-rownames(df_modelsig) <- c("Age & Gender", "Alcohol", "Diseases", "Disability", "Health", "Medicines", "Mental Health", "Migration Status",  "Personal",  "Physical Activity","Protection Factors", "Qualtiy of Life", "Sight and Hearing", "Smoking", "SocioDemographics", "State", "Use", "Vaccinations", "None")
-df_modelsig$ThemeEn <- rownames(df_modelsig)
-rownames(df_modelsig) <- c()
 
-df_modelsig <- df_modelsig %>% dplyr::select(c(ThemeEn, significant, Not_significant))
-df_modelsig <- df_modelsig %>% pivot_longer(-ThemeEn, names_to = "condition", values_to = "value")
-
-df_modelsig <- df_modelsig %>% rename(theme = ThemeEn)
-df_modelsig <- df_modelsig[1:36,]
-
-
-df_modelsig %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) 
-
+# # @TODO: There seems to be an error with the following area, thus skipped
+# 
+# #Recreation of the significance for each variable theme, recreation of file titled 2.7_stat_sig_var.csv based on the significance in the full dataset model.
+# df_modelsig <- reshape2::dcast(df_model_sumd, ThemeEn ~ Sig)
+# df_modelsig$significant <- (df_modelsig$`*` + df_modelsig$`**` + df_modelsig$`***` + df_modelsig$.)
+# df_modelsig <- df_modelsig %>% rename(Not_significant = Var.2)
+# rownames(df_modelsig) <- c("Age & Gender", "Alcohol", "Diseases", "Disability", "Health", "Medicines", "Mental Health", "Migration Status",  "Personal",  "Physical Activity","Protection Factors", "Qualtiy of Life", "Sight and Hearing", "Smoking", "SocioDemographics", "State", "Use", "Vaccinations", "None")
+# df_modelsig$ThemeEn <- rownames(df_modelsig)
+# rownames(df_modelsig) <- c()
+# 
+# df_modelsig <- df_modelsig %>% dplyr::select(c(ThemeEn, significant, Not_significant))
+# df_modelsig <- df_modelsig %>% pivot_longer(-ThemeEn, names_to = "condition", values_to = "value")
+# 
+# df_modelsig <- df_modelsig %>% rename(theme = ThemeEn)
+# df_modelsig <- df_modelsig[1:36,]
+# 
+# 
+# df_modelsig %>%
+#   kable(booktabs = T, digits = 4) %>%
+#   kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)
+# 
+# describe(df_modelsig)
+# 
+# ggplot(df_modelsig, aes(fill=condition, x=reorder(theme, -value), y=value)) +
+#   geom_bar(position="stack", stat="identity") +
+#   labs(title = "Statistically significant variables", x = " ", y = " ", caption = "GEDA (2014 - 2015)") +
+#   theme(panel.border = element_blank(),
+#         panel.grid.major = element_blank(),
+#         panel.grid.minor = element_blank(),
+#         legend.title = element_blank(),
+#         axis.line = element_line(color = "gray"),
+#         axis.ticks.x = element_blank(),
+#         axis.ticks.y = element_blank()) +
+#   theme(axis.text.x = element_text(angle = 90)) +
+#   scale_fill_manual(values = c("gray", "lightblue"))
 ```
-
-```{r}
-describe(df_modelsig)
-```
-
-
-```{r}
-#var_sig3 <- read_csv("data/modelsig.csv")
-
-ggplot(df_modelsig, aes(fill=condition, x=reorder(theme, -value), y=value)) +
-  geom_bar(position="stack", stat="identity") +
-  labs(title = "Statistically significant variables", x = " ", y = " ", caption = "GEDA (2014 - 2015)") +
-  theme(panel.border = element_blank(),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        legend.title = element_blank(),
-        axis.line = element_line(color = "gray"),
-        axis.ticks.x = element_blank(),
-        axis.ticks.y = element_blank()) +
-  theme(axis.text.x = element_text(angle = 90)) +
-  scale_fill_manual(values = c("gray", "lightblue"))
-```
-
 
 ## Gender Subsets
 
@@ -2036,6 +2012,7 @@ df_model_genders %>%
 
 ```
 
+# CHAPTER NO 3
 
 ###Table 3
 ```{r}
@@ -2051,9 +2028,9 @@ subsetCirrhosis_df1 <- subsetCirrhosis_df1 %>% rename(Yes = `1`, No = `2`)
 colnames(subsetCirrhosis_df1) <- c("GZmehm1", "Yes", "No", "Yes", "No", "Yes", "No")
 
 subsetCirrhosis_df1 %>%
-  kable(booktabs = T, digits = 4) %>%
+  kable(booktabs = T, digits = 4, "latex") %>%
   kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
-  add_header_above(c(" ", "Response" = 2, "Prop. Response"= 2, "Prop. in Level"= 2)) ##  %>%    save_kable("data/images/cirrhosispopulation.png")
+  add_header_above(c(" ", "Response" = 2, "Prop. Response"= 2, "Prop. in Level"= 2)) %>% save_kable("./charts/cirrhosispopulation.png")
 
 ```
 
@@ -2067,9 +2044,17 @@ df_model_sumallsort <- df_model_sumallsort[order(-df_model_sumallsort$Logodds),]
 df_model_top10most <- df_model_sumallsort[1:10,]
 rownames(df_model_top10most) <- c()
 
-df_model_top10most %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) # #  %>%    save_kable("data/images/top10most.png")
+df_model_top10most<- df_model_top10most %>% dplyr::select(-c(ThemeEn))
+
+colnames(df_model_top10most) <- c("", "Std. Err.", "P.Value", "", "Logodds", "Label", "Answer")
+
+t <- df_model_top10most %>%
+  kable(booktabs = T,  digits = 4, "latex") %>% 
+  kable_styling(latex_options="scale_down",font_size=10) %>% column_spec(6:7, width = "4cm")
+
+save_kable(t, "./charts/top10_most.png")
+t %>% as_image()
+
 
 ```
 
@@ -2084,19 +2069,33 @@ df_model_sumallRevsort <- df_model_sumallRevsort[order(df_model_sumallRevsort$Lo
 df_model_top10least <- df_model_sumallRevsort[1:10,]
 rownames(df_model_top10least) <- c()
 
+df_model_top10least<- df_model_top10least %>% dplyr::select(-c(ThemeEn))
 
-df_model_top10least %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) ##  %>%    save_kable("data/images/top10least.png")
+colnames(df_model_top10least) <- c("", "Std. Err.", "P.Value", "", "Logodds", "Label", "Answer")
+  
+
+t <- df_model_top10least %>%
+  kable(booktabs = T,  digits = 4, "latex") %>% 
+  kable_styling(latex_options="scale_down",font_size=10) %>% column_spec(6:7, width = "4cm")
+
+save_kable(t, "./charts/top10_least.png")
+t %>% as_image()
+
 ```
 
 
 ```{r}
 #Viewing the significance of various aspects of AGE & GENDER, which are or are not significant
-df_model_subsetAgeGender <- df_model_sumd %>% filter(str_detect(ThemeEn, "1701"))
-df_model_subsetAgeGender %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/ageandgender2.png") 
+df_model_subsetAgeGender <- df_model_sumd %>% filter(str_detect(ThemeEn, "1701")) %>% dplyr::select(-c(ThemeEn))
+
+colnames(df_model_subsetAgeGender) = c('', 'Std. Err.', 'P.Value','Sig', 'Logodds','Label', 'Answer')
+
+t <- df_model_subsetAgeGender %>%
+  kable(booktabs = T,  digits = 4, "latex")
+
+save_kable(t, "./charts/ageandgender2.png")
+t %>% as_image()
+
 ```
 
 ###Table 6
@@ -2111,9 +2110,8 @@ subsetGender_df1$propWBFemale <- subsetGender_df1[,3]/sum(subsetGender_df1[,3])
 colnames(subsetGender_df1) = c('GZmehm1', 'Male', 'Female','Male', 'Female','Male', 'Female')
 
 subsetGender_df1 %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
-  add_header_above(c(" ", "Population" = 2, "Prop Response "= 2, "Prop in Level" = 2)) # %>% save_kable("data/images/ageandgenderpopulation.png") 
+  kable(booktabs = T, digits = 4, "latex") %>%
+  add_header_above(c(" ", "Population" = 2, "Prop Response "= 2, "Prop in Level" = 2))  %>% save_kable("./charts/ageandgenderpopulation.png") 
 ```
 
 
@@ -2123,15 +2121,17 @@ subsetGender_df1 %>%
 describe(df_subsetall3$AKoft12_k)
 ```
 
-###Table 7 
 ```{r}
 #Viewing the significance of various aspects of ALCOHOL, which are or are not significant
 df_model_subsetAlcohol <- df_model_sumd %>% filter(str_detect(ThemeEn, "1504"))
 df_model_subsetAlcohol <- df_model_subsetAlcohol %>% dplyr::select(-ThemeEn)
 
-df_model_subsetAlcohol %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/alcoholconsumptionfrequencysignificance.png")
+colnames(df_model_subsetAlcohol) <- c("", "Std. Err.", "P.Value", "", "Logodds", "Label", "Answer")
+
+t <- df_model_subsetAlcohol %>%
+  kable(booktabs = T, digits = 4, "latex") 
+save_kable(t, "./charts/alcoholconsumptionfrequencysignificance.png")
+t %>% as_image()
 
 ```
 
@@ -2165,30 +2165,32 @@ subsetAlcohol_df1 %>%
 
 ## Disease Subsets
 
-###Table 8
 ```{r}
 #Viewing the significance of various aspects of DISEASES, which are or are not significant
 df_model_subsetDisease <- df_model_sumd %>% filter(str_detect(ThemeEn, "1101"))
 df_model_subsetDisease <- df_model_subsetDisease %>% dplyr::select(-ThemeEn)
 
-df_model_subsetDisease %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/diseasesignificance.png") #%>%
-  #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
-  #add_footnote("footnote")
+colnames(df_model_subsetDisease) <- c("", "Std. Err.", "P.Value", "", "Logodds", "Label", "Answer")
+
+t <- df_model_subsetDisease %>%
+  kable(booktabs = T, digits = 4, "latex") 
+save_kable(t, font_size= 20, "./charts/diseasesignificance.png")
+t %>% as_image()
 ```
 
-### Table 9 
 ```{r}
 #Viewing the significance of various aspects of HEALTH FOCUS AND LIMITATIONS, which are or are not significant
-df_model_subsetHealth <- df_model_sumd %>% filter(str_detect(ThemeEn, "1102"))
+df_model_subsetHealth <- df_model_sumd %>% filter(str_detect(ThemeEn, "1102")) %>% dplyr::select(-c(ThemeEn)) 
 
-df_model_subsetHealth %>%
-  kable(booktabs = T,  digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) # %>% save_kable("data/images/health_focus_limitations_significance.png")
+colnames(df_model_subsetHealth) <- c("", "Std. Err.", "P.Value", "", "Logodds", "Label", "Answer")
+
+t <- df_model_subsetHealth %>%
+  kable(booktabs = T,  digits = 4, "latex") 
+
+save_kable(t, "./charts/health_focus_limitations_significance.png")
+t %>% as_image()
 ```
 
-### Table 10
 ```{r}
 subsetChronicDiseases_df1 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ GZmehm3C)
 
@@ -2201,13 +2203,12 @@ subsetChronicDiseases_df1$propWBNo <- subsetChronicDiseases_df1[,3]/sum(subsetCh
 subsetChronicDiseases_df1 <- subsetChronicDiseases_df1 %>% rename(Yes = `1`, No = `2`)
 colnames(subsetChronicDiseases_df1) = c('GZmehm1', 'Yes', 'No','Yes', 'No','Yes', 'No')
 
-subsetChronicDiseases_df1 %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
-  add_header_above(c(" ", "Response" = 2, "Prop Response"= 2, "Prop in Level"= 2)) #  %>%        save_kable("data/images/chronic_disease_population.png")
+t <- subsetChronicDiseases_df1 %>%
+  kable(booktabs = T, digits = 4, "latex") %>%  add_header_above(c(" ", "Response" = 2, "Prop Response"= 2, "Prop in Level"= 2)) 
+save_kable(t, "./charts/chronic_disease_population.png")
+t %>% as_image()
 ```
 
-###Table 11
 ```{r}
 subsetChronicDiseases_df2 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ GZmehm2D)
 
@@ -2222,35 +2223,40 @@ subsetChronicDiseases_df2 <- subsetChronicDiseases_df2 %>% rename(Strongly_Limit
 
 colnames(subsetChronicDiseases_df2) = c('GZmehm1', 'Strongly', 'Moderately', 'None', 'Strongly', 'Moderately','None', 'Strongly', 'Moderately', 'None')
 
-subsetChronicDiseases_df2 %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
-  add_header_above(c(" ", "Degree of limitation Response" = 3, "Prop of Response"= 3, "Prop in Level"= 3)) # %>% save_kable("data/images/limitation_population_table.png")
+t <- subsetChronicDiseases_df2 %>%
+  kable(booktabs = T, digits = 4, "latex") %>%
+  add_header_above(c(" ", "Degree of limitation Response" = 3, "Prop of Response"= 3, "Prop in Level"= 3)) 
+save_kable(t, "./charts/limitation_population_table.png")
+t %>% as_image()
 ```
+## Mental 
 
-###Table 12
 ```{r}
 #Viewing the significance of various aspects of MENTAL HEALTH, which are or are not significant
-df_model_subsetMentalHealth <- df_model_sumd %>% filter(str_detect(ThemeEn, "1301"))
+df_model_subsetMentalHealth <- df_model_sumd %>% filter(str_detect(ThemeEn, "1301")) %>% dplyr::select(-c(ThemeEn))
 
-df_model_subsetMentalHealth %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/mental_health_significance.png")
+colnames(df_model_subsetMentalHealth) <- c("", "Std. Err.", "P.Value", "", "Logodds", "Label", "Answer")
+
+t <- df_model_subsetMentalHealth %>%
+  kable(booktabs = T, digits = 4, "latex")
+save_kable(t, "./charts/mental_health_significance.png")
+t %>% as_image();
 ```
 
 
-###Table 13
 ```{r}
 #Viewing the significance of various aspects of BIRTHPLACE AND CITIZENSHIP, which are or are not significant
 df_model_subsetMigration <- df_model_sumd %>% filter(str_detect(ThemeEn, "1705"))
 df_model_subsetMigration <- df_model_subsetMigration %>% dplyr::select(-ThemeEn) 
 
-df_model_subsetMigration %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) #  %>%    save_kable("data/images/migration_significance.png")
+colnames(df_model_subsetMigration) = c('', 'Std. Err.', 'P.Value','Sig', 'Logodds','Label', 'Answer')
+
+t <- df_model_subsetMigration %>%
+  kable(booktabs = T, digits = 4, "latex")
+save_kable(t, "./charts/migration_significance.png")
+t %>% as_image()
 ```
 
-###Table 14
 
 ```{r}
 #where born subsets
@@ -2265,16 +2271,16 @@ subsetgermanborn_df1$propWBNonEU <- subsetgermanborn_df1[,4]/sum(subsetgermanbor
 
 subsetgermanborn_df1 <- subsetgermanborn_df1 %>% rename(Germany = `10`, Other_EU_Country = `21`, Non_EU_Country = `22`)
 
-colnames(subsetgermanborn_df1) = c('GZmehm1', 'Germany', 'EU', 'Non_EU', 'Germany', 'EU', 'Non_EU',  'Germany', 'EU', 'Non_EU')
+colnames(subsetgermanborn_df1) = c('GZmehm1', 'Germany', 'EU', 'Non-EU', 'Germany', 'EU', 'Non-EU',  'Germany', 'EU', 'Non-EU')
 
-subsetgermanborn_df1 %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
-  add_header_above(c(" ", "Where Born Response" = 3, "Prop Response"= 3, "Prop in Level" = 3)) #  %>%    save_kable("data/images/birthplace_population_table.png")
+t <- subsetgermanborn_df1 %>%
+  kable(booktabs = T, digits = 4, "latex") %>%
+  add_header_above(c(" ", "Where Born Response" = 3, "Prop Response"= 3, "Prop in Level" = 3))
+save_kable(t, "./charts/birthplace_population_table.png")
+t %>% as_image()
   #add_footnote("footnote")
 ```
 
-## Table 15
 ```{r}
 #citizen subsets
 subsetgermancitizen_df1 <- reshape2::dcast(df_subsetall3, GZmehm1 ~ MIcitizen)
@@ -2289,12 +2295,13 @@ subsetgermancitizen_df1$propWBNonEU <- subsetgermancitizen_df1[,4]/sum(subsetger
 
 subsetgermancitizen_df1 <- subsetgermancitizen_df1 %>% rename(Germany = `10`, Other_EU_Country = `21`, Non_EU_Country = `22`)
 
-colnames(subsetgermancitizen_df1) = c('GZmehm1', 'German', 'EU', 'Non_EU', 'German', 'EU', 'Non_EU',  'German', 'EU', 'Non_EU')
+colnames(subsetgermancitizen_df1) = c('GZmehm1', 'German', 'EU', 'Non-EU', 'German', 'EU', 'Non-EU',  'German', 'EU', 'Non-EU')
 
-subsetgermancitizen_df1 %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
-  add_header_above(c(" ", "Citizenship Reponse" = 3, "Prop Response"= 3, "Proportion in   Level" = 3)) # %>%   save_kable("data/images/citizenship_population_table.png")
+t <- subsetgermancitizen_df1 %>%
+  kable(booktabs = T, digits = 4, "latex") %>%
+  add_header_above(c(" ", "Citizenship Reponse" = 3, "Prop Response"= 3, "Proportion in   Level" = 3))
+save_kable(t, "./charts/citizenship_population_table.png")
+t %>% as_image()
 
 ```
 
@@ -2305,9 +2312,15 @@ subsetgermancitizen_df1 %>%
 df_model_subsetPersData <- df_model_sumd %>% filter(str_detect(ThemeEn, "1702"))
 df_model_subsetPersData <- df_model_subsetPersData %>% dplyr::select(-ThemeEn)  
 
-df_model_subsetPersData %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/household_BMI_significance.png")
+colnames(df_model_subsetPersData) = c('', 'Std. Err.', 'P.Value','Sig', 'Logodds','Label', 'Answer')
+
+t <- df_model_subsetPersData %>%
+  kable(booktabs = T, digits = 4, "latex")  %>%
+    kable_styling(latex_options="scale_down",font_size=10) %>% column_spec(1:6, width = "1.5cm") %>%
+    column_spec(6:7, width = "5cm") 
+save_kable(t, "./charts/household_BMI_significance.png")
+t %>% as_image()
+
 ```
 
 
@@ -2316,9 +2329,13 @@ df_model_subsetPersData %>%
 #Viewing the significance of various aspects of QUALITY OF LIFE, which are or are not significant
 df_model_subsetQOL <- df_model_sumd %>% filter(str_detect(ThemeEn, "1109"))
 df_model_subsetQOL <- df_model_subsetQOL %>% dplyr::select(-ThemeEn)
-df_model_subsetQOL %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/QOL_significance_table.png")
+
+colnames(df_model_subsetQOL) = c('', 'Std. Err.', 'P.Value','Sig', 'Logodds','Label', 'Answer')
+
+t <- df_model_subsetQOL %>%
+  kable(booktabs = T, digits = 4, "latex") 
+save_kable(t, "./charts/QOL_significance_table.png")
+t %>% as_image()
 ```
 
 ###Table 18 
@@ -2341,12 +2358,16 @@ subsetQOLIntensity_df1$propWBVeryStrongPain <- subsetQOLIntensity_df1[,6]/sum(su
 
 subsetQOLIntensity_df1 <- subsetQOLIntensity_df1 %>% rename(No_Pain = `1`, Light_Pain = `2`, Very_Light_Pain = `3`, Moderate_Pain =`4`, Strong_Pain =`5`, Very_Strong_Pain =`6`)
 
-colnames(subsetQOLIntensity_df1) = c('GZmehm1', 'None', 'V_Light','Light', 'Moderate','Strong', 'V_Strong', 'None', 'V_Light','Light', 'Moderate','Strong', 'V_Strong','None', 'V_Light','Light', 'Moderate','Strong', 'V_Strong' )
+colnames(subsetQOLIntensity_df1) = c('GZmehm1', 'None', 'V.Light','Light', 'Moderate','Strong', 'V.Strong', 'None', 'V.Light','Light', 'Moderate','Strong', 'V.Strong','None', 'V.Light','Light', 'Moderate','Strong', 'V.Strong' )
 
-subsetQOLIntensity_df1 %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
-  add_header_above(c(" ", "Pain Intensity Response" = 6, "Prop Response"= 6, "Prop in Level" = 6))#  %>%    save_kable("data/images/pain_population_table.png")
+t <- subsetQOLIntensity_df1 %>%
+  kable(booktabs = T, digits = 2, "latex") %>%
+  add_header_above(c(" ", "Pain Intensity Response" = 6, "Prop Response"= 6, "Prop in Level" = 6))
+
+save_kable(t, "./charts/pain_population_table.png")
+
+t %>% as_image()
+
 ```
 
 ###Table 19 
@@ -2355,9 +2376,14 @@ subsetQOLIntensity_df1 %>%
 df_model_subsetSmoking <- df_model_sumd %>% filter(str_detect(ThemeEn, "1505"))
 df_model_subsetSmoking <- df_model_subsetSmoking%>% dplyr::select(-ThemeEn)
 
-df_model_subsetSmoking %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/smoking_significance_table.png") 
+colnames(df_model_subsetSmoking) = c('', 'Std. Err.', 'P.Value','Sig', 'Logodds','Label', 'Answer')
+
+t <- df_model_subsetSmoking %>%
+  kable(booktabs = T, digits = 4, "latex")
+
+save_kable(t, "./charts/smoking_significance_table.png") 
+
+t %>% as_image()
 ```
 
 ###Table 20
@@ -2378,10 +2404,14 @@ subsetsmoke_df1 <- subsetsmoke_df1 %>% rename(Daily = `1`, Occasionally = `2`, Q
 
 colnames(subsetsmoke_df1) = c('GZmehm1', 'Daily', 'Occ','Quit', 'Never','Daily', 'Occ','Quit', 'Never', 'Daily', 'Occ','Quit', 'Never')
 
-subsetsmoke_df1 %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
-  add_header_above(c(" ", "Smoking Status Response" = 4, "Prop Response"= 4, "Prop in Level" = 4))#  %>%    save_kable("data/images/smoking_population_table.png") 
+t <- subsetsmoke_df1 %>%
+  kable(booktabs = T, digits = 4, "latex") %>%
+  add_header_above(c(" ", "Smoking Status Response" = 4, "Prop Response"= 4, "Prop in Level" = 4))
+
+save_kable(t, font_size=4, "./charts/smoking_population_table.png")
+
+t %>% as_image()
+
 ```
 
 ### Table 21 Insurance and medical tests
@@ -2391,9 +2421,13 @@ df_model_subsetUse <- df_model_sumd %>% filter(str_detect(ThemeEn, "1401"))
 df_model_subsetUse <- df_model_subsetUse %>% dplyr::select(-ThemeEn)
 df_model_subsetUse <- df_model_subsetUse %>% filter(p_value <= .1)
 
-df_model_subsetUse %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/insurance_tests_table.png")
+colnames(df_model_subsetUse) = c('', 'Std. Err.', 'P.Value','Sig', 'Logodds','Label', 'Answer')
+
+t <- df_model_subsetUse %>%
+  kable(booktabs = T, digits = 4, "latex") 
+save_kable(t, "./charts/insurance_tests_table.png")
+t %>% as_image()
+
 ```
 
 ```{r}
@@ -2428,8 +2462,11 @@ subsetbloodfat12_df2$propWBNo <- subsetbloodfat12_df2[,3]/sum(subsetbloodfat12_d
 
 colnames(subsetbloodfat12_df2) <- c("GZmehm1", "Yes", "No", "Yes", "No", "Yes", "No")
 
-subsetbloodfat12_df2 %>%
-  kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
-  add_header_above(c(" ", "Proactive Blood Fat Response" = 2, "Prop Response" = 2, "Prop in Level" = 2))#  %>%    save_kable("data/images/proactive_blood_fat_population_table.png")
+t <- subsetbloodfat12_df2 %>%
+  kable(booktabs = T, digits = 4, "latex") %>%
+  add_header_above(c(" ", "Proactive Blood Fat Response" = 2, "Prop Response" = 2, "Prop in Level" = 2))
+
+save_kable(t, "./charts/proactive_blood_fat_population_table.png")
+t %>% as_image()
+
 ```

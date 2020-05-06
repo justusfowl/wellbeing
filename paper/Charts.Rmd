@@ -38,6 +38,8 @@ library(stargazer)
 library(scales)
 library(readr)
 library(ggthemes)
+library(stringr)
+
 
 ```
 
@@ -54,6 +56,7 @@ sd(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1))
 ```
 
 ```{r, fig.width=17, fig.height= 5}
+
 df_chart <- read_excel("data/Number_variables_per_category.xlsx")
 
 ggplot(df_chart, aes(x=reorder(Type, -Value), y=Value)) + 
@@ -70,6 +73,8 @@ ggplot(df_chart, aes(x=reorder(Type, -Value), y=Value)) +
         axis.line = element_line(color = "gray"),
         axis.ticks.x = element_blank(),
         axis.ticks.y = element_blank())
+
+ggsave("./charts/number_vars_theme.png")
 
 ```
 
@@ -132,14 +137,17 @@ ggplot(df_geda_num, aes(x=as.numeric(as.character(GZmehm1))))+
   theme_bw()
 ```
 
-```{r}
+```{r, fig.width=15, fig.height=5}
 var_sig <- read_csv("data/2.7_stat_sig_var.csv")
+
+title <- "Statistically significant variables"
 
 ggplot(var_sig, aes(fill=condition, x=reorder(theme, -value), y=value)) +
   geom_bar(position="stack", stat="identity") +
-  labs(title = "Statistically significant variables", x = " ", y = " ", caption = "GEDA (2014 - 2015)") +
+  labs(x = " ", y = " ", caption = "GEDA (2014 - 2015)") +
   theme_few() +
-  theme(panel.border = element_blank(),
+  theme(text = element_text(size= 20),
+        panel.border = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         legend.title = element_blank(),
@@ -148,6 +156,8 @@ ggplot(var_sig, aes(fill=condition, x=reorder(theme, -value), y=value)) +
         axis.ticks.y = element_blank()) +
   theme(axis.text.x = element_text(angle = 90)) +
   scale_fill_manual(values = c("gray", "lightblue"))
+
+ggsave(paste0("./charts/", str_replace_all(title, " ", "_"), ".png"))
 
 
 ```
@@ -531,7 +541,7 @@ grid.arrange(
 ```{r}
 
 df_geda_theme <- read_excel("data/geda_theme_list.xlsx")
-kable(df_geda_theme, align = "c", booktabs = TRUE, escape = FALSE, "latex") %>%
+kable(df_geda_theme, align = "l", booktabs = TRUE, escape = FALSE, "latex") %>%
   kable_styling(latex_options = c("striped", "scale_down")) %>% as_image()
 ```
 
