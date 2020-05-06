@@ -13,6 +13,7 @@ analysis/local/
 
 analysis/*.csv
 paper/data/
+paper/charts/
 paper/*.png
 *.Rproj
 *.Rhistory

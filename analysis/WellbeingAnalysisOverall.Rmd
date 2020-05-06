@@ -823,7 +823,7 @@ summary(psm_results)
 
 Model fitting:
 ```{r, echo=F}
-m <- polr(GZmehm1 ~ ., data = trainingData, Hess=TRUE)
+m <- polr(GZmehm1 ~ ., data = df_base, Hess=TRUE)
 summary(m)
 ```
 

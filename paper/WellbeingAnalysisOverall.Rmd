@@ -1152,7 +1152,7 @@ df_bot_cols
 
 ```{r}
 #read in the life expectancy table from #https://ec.europa.eu/eurostat/data/database?node_code=demo_mlexpec this provides the lifexpectancy for each German state broken down by age, year and gender. 
-R_lifeexp <- read_tsv("data/demo_r_mlifexp.tsv")
+R_lifeexp <- read_tsv("../analysis/data/demo_r_mlifexp.tsv")
 ```
 
 
@@ -1212,7 +1212,7 @@ R_LE_DE <- mutate(R_LE_DE, Region = ifelse(Region == "DE1", 8, ifelse(Region== "
 
 ```{r}
 #To create other charts it is also easier to reassign territories by their name for easier explanation
-R_LE_DEPPT <- mutate(R_LE_DE, Region = ifelse(Region == 8, "BADEN-WÜRTTEMBERG", ifelse(Region== 9, "BAVARIA",  ifelse(Region == 11, "BERLIN",  ifelse(Region == 12, "BRANDENBERG",  ifelse(Region == 4, "BREMEN",ifelse(Region == 2, "HAMBURG",  ifelse(Region ==  6, "HESSEN", ifelse(Region == 13, "MECKLENBERG-VORPOMMERN",  ifelse(Region == 3, "LOWER SAXONY",  ifelse(Region == 5, "NORTH RHINE-WESTPHALIA", ifelse(Region == 7, "RHEINLAND-PALATINATE",  ifelse(Region == 10, "SAARLAND",  ifelse(Region == 14, "SAXONY",  ifelse(Region == 15, "SAXONY-ANHALT",  ifelse(Region == 1,"SCHLESWIG-HOLSTEIN", ifelse(Region == 16, "THURINGIA",  Region)))))))))))))))))
+R_LE_DEPPT <- mutate(R_LE_DE, Region = ifelse(Region == 8, "BADEN-W?RTTEMBERG", ifelse(Region== 9, "BAVARIA",  ifelse(Region == 11, "BERLIN",  ifelse(Region == 12, "BRANDENBERG",  ifelse(Region == 4, "BREMEN",ifelse(Region == 2, "HAMBURG",  ifelse(Region ==  6, "HESSEN", ifelse(Region == 13, "MECKLENBERG-VORPOMMERN",  ifelse(Region == 3, "LOWER SAXONY",  ifelse(Region == 5, "NORTH RHINE-WESTPHALIA", ifelse(Region == 7, "RHEINLAND-PALATINATE",  ifelse(Region == 10, "SAARLAND",  ifelse(Region == 14, "SAXONY",  ifelse(Region == 15, "SAXONY-ANHALT",  ifelse(Region == 1,"SCHLESWIG-HOLSTEIN", ifelse(Region == 16, "THURINGIA",  Region)))))))))))))))))
 ```
 
 
@@ -1297,7 +1297,6 @@ ggplot(df_geda_LifeExp2, aes(LifeExp, as.numeric(GZmehm1)*as.numeric(age5B)*as.n
   geom_point(color = "lightblue") +
   stat_smooth(method = "lm", formula = y ~ x) +
   labs(title = "Life expectency vs wellbeing score", subtitle = "including age and gender", x = "Life Expectancy", y = "LifeExp ~ score * age * sex", caption = "GEDA (2014 - 2015)") +
-  theme_few() +
   theme(panel.border = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -1931,7 +1930,6 @@ describe(df_modelsig)
 ggplot(df_modelsig, aes(fill=condition, x=reorder(theme, -value), y=value)) +
   geom_bar(position="stack", stat="identity") +
   labs(title = "Statistically significant variables", x = " ", y = " ", caption = "GEDA (2014 - 2015)") +
-  theme_few() +
   theme(panel.border = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -2055,7 +2053,7 @@ colnames(subsetCirrhosis_df1) <- c("GZmehm1", "Yes", "No", "Yes", "No", "Yes", "
 subsetCirrhosis_df1 %>%
   kable(booktabs = T, digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
-  add_header_above(c(" ", "Response" = 2, "Prop. Response"= 2, "Prop. in Level"= 2)) %>%    save_kable("data/images/cirrhosispopulation.png")
+  add_header_above(c(" ", "Response" = 2, "Prop. Response"= 2, "Prop. in Level"= 2)) ##  %>%    save_kable("data/images/cirrhosispopulation.png")
 
 ```
 
@@ -2071,7 +2069,7 @@ rownames(df_model_top10most) <- c()
 
 df_model_top10most %>%
   kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/top10most.png")
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) # #  %>%    save_kable("data/images/top10most.png")
 
 ```
 
@@ -2089,7 +2087,7 @@ rownames(df_model_top10least) <- c()
 
 df_model_top10least %>%
   kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/top10least.png")
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) ##  %>%    save_kable("data/images/top10least.png")
 ```
 
 
@@ -2098,7 +2096,7 @@ df_model_top10least %>%
 df_model_subsetAgeGender <- df_model_sumd %>% filter(str_detect(ThemeEn, "1701"))
 df_model_subsetAgeGender %>%
   kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/ageandgender2.png") 
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/ageandgender2.png") 
 ```
 
 ###Table 6
@@ -2115,7 +2113,7 @@ colnames(subsetGender_df1) = c('GZmehm1', 'Male', 'Female','Male', 'Female','Mal
 subsetGender_df1 %>%
   kable(booktabs = T, digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
-  add_header_above(c(" ", "Population" = 2, "Prop Response "= 2, "Prop in Level" = 2)) %>% save_kable("data/images/ageandgenderpopulation.png") 
+  add_header_above(c(" ", "Population" = 2, "Prop Response "= 2, "Prop in Level" = 2)) # %>% save_kable("data/images/ageandgenderpopulation.png") 
 ```
 
 
@@ -2133,7 +2131,7 @@ df_model_subsetAlcohol <- df_model_subsetAlcohol %>% dplyr::select(-ThemeEn)
 
 df_model_subsetAlcohol %>%
   kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/alcoholconsumptionfrequencysignificance.png")
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/alcoholconsumptionfrequencysignificance.png")
 
 ```
 
@@ -2175,7 +2173,7 @@ df_model_subsetDisease <- df_model_subsetDisease %>% dplyr::select(-ThemeEn)
 
 df_model_subsetDisease %>%
   kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/diseasesignificance.png") #%>%
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/diseasesignificance.png") #%>%
   #add_header_above(c(" ", "Training" = 2, "Training2"= 2, "Training3"= 2, " " =4)) %>%
   #add_footnote("footnote")
 ```
@@ -2187,7 +2185,7 @@ df_model_subsetHealth <- df_model_sumd %>% filter(str_detect(ThemeEn, "1102"))
 
 df_model_subsetHealth %>%
   kable(booktabs = T,  digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%        save_kable("data/images/health_focus_limitations_significance.png")
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) # %>% save_kable("data/images/health_focus_limitations_significance.png")
 ```
 
 ### Table 10
@@ -2206,7 +2204,7 @@ colnames(subsetChronicDiseases_df1) = c('GZmehm1', 'Yes', 'No','Yes', 'No','Yes'
 subsetChronicDiseases_df1 %>%
   kable(booktabs = T, digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
-  add_header_above(c(" ", "Response" = 2, "Prop Response"= 2, "Prop in Level"= 2)) %>%        save_kable("data/images/chronic_disease_population.png")
+  add_header_above(c(" ", "Response" = 2, "Prop Response"= 2, "Prop in Level"= 2)) #  %>%        save_kable("data/images/chronic_disease_population.png")
 ```
 
 ###Table 11
@@ -2227,7 +2225,7 @@ colnames(subsetChronicDiseases_df2) = c('GZmehm1', 'Strongly', 'Moderately', 'No
 subsetChronicDiseases_df2 %>%
   kable(booktabs = T, digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
-  add_header_above(c(" ", "Degree of limitation Response" = 3, "Prop of Response"= 3, "Prop in Level"= 3)) %>% save_kable("data/images/limitation_population_table.png")
+  add_header_above(c(" ", "Degree of limitation Response" = 3, "Prop of Response"= 3, "Prop in Level"= 3)) # %>% save_kable("data/images/limitation_population_table.png")
 ```
 
 ###Table 12
@@ -2237,7 +2235,7 @@ df_model_subsetMentalHealth <- df_model_sumd %>% filter(str_detect(ThemeEn, "130
 
 df_model_subsetMentalHealth %>%
   kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/mental_health_significance.png")
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/mental_health_significance.png")
 ```
 
 
@@ -2249,7 +2247,7 @@ df_model_subsetMigration <- df_model_subsetMigration %>% dplyr::select(-ThemeEn)
 
 df_model_subsetMigration %>%
   kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)  %>%    save_kable("data/images/migration_significance.png")
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) #  %>%    save_kable("data/images/migration_significance.png")
 ```
 
 ###Table 14
@@ -2272,7 +2270,7 @@ colnames(subsetgermanborn_df1) = c('GZmehm1', 'Germany', 'EU', 'Non_EU', 'German
 subsetgermanborn_df1 %>%
   kable(booktabs = T, digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
-  add_header_above(c(" ", "Where Born Response" = 3, "Prop Response"= 3, "Prop in Level" = 3))  %>%    save_kable("data/images/birthplace_population_table.png")
+  add_header_above(c(" ", "Where Born Response" = 3, "Prop Response"= 3, "Prop in Level" = 3)) #  %>%    save_kable("data/images/birthplace_population_table.png")
   #add_footnote("footnote")
 ```
 
@@ -2296,8 +2294,7 @@ colnames(subsetgermancitizen_df1) = c('GZmehm1', 'German', 'EU', 'Non_EU', 'Germ
 subsetgermancitizen_df1 %>%
   kable(booktabs = T, digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
-  add_header_above(c(" ", "Citizenship Reponse" = 3, "Prop Response"= 3, "Proportion in   Level" = 3)) %>% 
-  save_kable("data/images/citizenship_population_table.png")
+  add_header_above(c(" ", "Citizenship Reponse" = 3, "Prop Response"= 3, "Proportion in   Level" = 3)) # %>%   save_kable("data/images/citizenship_population_table.png")
 
 ```
 
@@ -2310,7 +2307,7 @@ df_model_subsetPersData <- df_model_subsetPersData %>% dplyr::select(-ThemeEn)
 
 df_model_subsetPersData %>%
   kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/household_BMI_significance.png")
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/household_BMI_significance.png")
 ```
 
 
@@ -2321,7 +2318,7 @@ df_model_subsetQOL <- df_model_sumd %>% filter(str_detect(ThemeEn, "1109"))
 df_model_subsetQOL <- df_model_subsetQOL %>% dplyr::select(-ThemeEn)
 df_model_subsetQOL %>%
   kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/QOL_significance_table.png")
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/QOL_significance_table.png")
 ```
 
 ###Table 18 
@@ -2349,7 +2346,7 @@ colnames(subsetQOLIntensity_df1) = c('GZmehm1', 'None', 'V_Light','Light', 'Mode
 subsetQOLIntensity_df1 %>%
   kable(booktabs = T, digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
-  add_header_above(c(" ", "Pain Intensity Response" = 6, "Prop Response"= 6, "Prop in Level" = 6)) %>%    save_kable("data/images/pain_population_table.png")
+  add_header_above(c(" ", "Pain Intensity Response" = 6, "Prop Response"= 6, "Prop in Level" = 6))#  %>%    save_kable("data/images/pain_population_table.png")
 ```
 
 ###Table 19 
@@ -2360,7 +2357,7 @@ df_model_subsetSmoking <- df_model_subsetSmoking%>% dplyr::select(-ThemeEn)
 
 df_model_subsetSmoking %>%
   kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/smoking_significance_table.png") 
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/smoking_significance_table.png") 
 ```
 
 ###Table 20
@@ -2384,7 +2381,7 @@ colnames(subsetsmoke_df1) = c('GZmehm1', 'Daily', 'Occ','Quit', 'Never','Daily',
 subsetsmoke_df1 %>%
   kable(booktabs = T, digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position")) %>%
-  add_header_above(c(" ", "Smoking Status Response" = 4, "Prop Response"= 4, "Prop in Level" = 4)) %>%    save_kable("data/images/smoking_population_table.png") 
+  add_header_above(c(" ", "Smoking Status Response" = 4, "Prop Response"= 4, "Prop in Level" = 4))#  %>%    save_kable("data/images/smoking_population_table.png") 
 ```
 
 ### Table 21 Insurance and medical tests
@@ -2396,7 +2393,7 @@ df_model_subsetUse <- df_model_subsetUse %>% filter(p_value <= .1)
 
 df_model_subsetUse %>%
   kable(booktabs = T, digits = 4) %>%
-  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%    save_kable("data/images/insurance_tests_table.png")
+  kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F)#  %>%    save_kable("data/images/insurance_tests_table.png")
 ```
 
 ```{r}
@@ -2434,19 +2431,5 @@ colnames(subsetbloodfat12_df2) <- c("GZmehm1", "Yes", "No", "Yes", "No", "Yes", 
 subsetbloodfat12_df2 %>%
   kable(booktabs = T, digits = 4) %>%
   kable_styling(bootstrap_options = c("striped", "hold_position"), full_width = F) %>%
-  add_header_above(c(" ", "Proactive Blood Fat Response" = 2, "Prop Response" = 2, "Prop in Level" = 2)) %>%    save_kable("data/images/proactive_blood_fat_population_table.png")
+  add_header_above(c(" ", "Proactive Blood Fat Response" = 2, "Prop Response" = 2, "Prop in Level" = 2))#  %>%    save_kable("data/images/proactive_blood_fat_population_table.png")
 ```
-```{r}
-magick::image_read()
-```
-
-
-
-
-
-
-
-
-
-
-
