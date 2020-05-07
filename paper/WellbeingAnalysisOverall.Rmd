@@ -1814,14 +1814,15 @@ start_row <- 1
 batch_size <- 35
 
 end_row <- batch_size
+max_rounds <- round(nrow(df_sum_chart)/batch_size)+1
 
-for (i in 1:round(nrow(df_sum_chart)/batch_size)){
+for (i in 1:max_rounds){
   
   if (end_row > nrow(df_sum_chart)){
     end_row <- nrow(df_sum_chart)
   }
   
-  print(i)
+  print(paste("Run: ", itt, ", From: ", start_row, " to: ", end_row ))
     
   t <- df_sum_chart[start_row:end_row,] %>%
     kable(booktabs = T,  digits = 4, "latex",row.names=FALSE) %>%  

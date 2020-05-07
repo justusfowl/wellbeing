@@ -548,16 +548,19 @@ kable(df_geda_theme, align = "l", booktabs = TRUE, escape = FALSE, "latex") %>%
 ```{r}
 
 var <- c("Doctor Visits (IAarzt1B)", "")
-ord <- c("0.104", "0.060")
-iv <- c("1.057 ***", "0.154")
+ord <- c("0.104", "(0.060)")
+iv <- c("1.057 ***", "(0.154)")
 
 df_iv <- data.frame("var"=var, "ord" = ord, "iv" = iv)
 
 colnames(df_iv) = c('', 'Ordinal Logistic Regression', 'Instrumental Variable')
 
 
- kable(df_iv, align = "c", booktabs = TRUE,  escape = FALSE, "latex") %>% 
-  add_header_above(c('', 'Dependend variable: GZmehm1'=2))  %>% as_image()
+ t <- kable(df_iv, align = "c", booktabs = TRUE,  escape = FALSE, "latex") %>% 
+  add_header_above(c('', 'Dependend variable: GZmehm1'=2)) %>% add_footnote(c("St. Err. in brackets"), notation="none")
+ 
+ save_kable(t, "./charts/IV_comparison.png")
+ t %>% as_image()
 
 ```
 
