@@ -32,5 +32,5 @@ The application makes use of several open source packages and is built for resea
 * [A. Aybar](https://github.com/andresaybar)
 * [J. Williams](https://github.com/williamsjerimiah)
 * [J. Asmar](https://github.com/joseasmar)
-* [B. Fluney]()
+* [W. Fluney](https://github.com/Fluneb)
 * [U. Kaulfuss](https://github.com/justusfowl)
