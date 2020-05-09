@@ -12,3 +12,10 @@ analysis/local/
 .Rproj.user
 
 analysis/*.csv
+paper/data/
+paper/charts/
+paper/*.png
+paper/*.csv
+*.Rproj
+*.Rhistory
+.gitignore

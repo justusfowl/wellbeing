@@ -1,0 +1,620 @@
+---
+title: "PaperCharts"
+author: "Uli Kaulfuss"
+date: "15 4 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+set.seed(42)
+
+library(foreign)
+# library(readstata13)
+library(dplyr)
+library(naniar)
+library(glmnet)
+library(ggplot2)
+library(gridExtra)
+library(MASS)
+library(Hmisc)
+library(reshape2)
+library(cluster)
+# library(VIM)
+library(readxl)
+library(gdata)
+library(caret)
+library(nnet)
+library(dummies)
+library(car)
+library(knitr)
+library(kableExtra)
+library(magick)
+library(webshot)
+# install packages according to: https://haozhu233.github.io/kableExtra/save_kable_and_as_image.html
+
+library(stargazer)
+library(scales)
+library(readr)
+library(ggthemes)
+library(stringr)
+
+
+```
+
+## Charts for the published paper
+
+```{r, echo=F}
+load(file = "data/geda_data.RData")
+h_wellbeing <- hist(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1), breaks = .5:5.5, main = "Wellbeing score responses", xlab = "1=very bad | 5=very good", ylab = "Responses", ylim = c(0,15000), col = "lightblue")
+h_wellbeing
+
+summary(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1))
+sd(as.numeric(df_geda_num[!is.na(df_geda_num$GZmehm1),]$GZmehm1))
+
+```
+
+```{r, fig.width=17, fig.height= 5}
+
+df_chart <- read_excel("data/Number_variables_per_category.xlsx")
+
+ggplot(df_chart, aes(x=reorder(Type, -Value), y=Value)) + 
+  geom_bar(position="stack", stat="identity", fill = "lightblue") +
+  coord_flip() +
+  theme_few() +
+  labs(title = "Number of variables per category",
+       x = " ", y = " ",
+       caption = "GEDA (2014 - 2015)") +
+  theme(panel.border = element_blank(), panel.grid.major = 
+          element_blank(), panel.grid.minor = 
+          element_blank(),
+        text = element_text(size= 24),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+ggsave("./charts/number_vars_theme.png")
+
+```
+
+
+
+```{r}
+
+df_chart <- read_excel("data/Number_variables_per_category.xlsx")
+
+ggplot(df_chart, aes(y=Value, x=Type)) + 
+  geom_bar(position="stack", stat="identity") + coord_flip() +
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+
+```{r}
+#subTitle <- "" # "(1973-74)" 
+#title <- "Distribution of wellbeing scores within cleaned dataset"
+#caption<- "" # "(1973-74)" 
+#subTitle <- "" # "(1973-74)" 
+#xLab <- "Wellbeing-Score (GZMehm1)"
+#yLab <- "Count (#)"
+
+title <- "gzmehm1_hist"
+
+ggplot(df_geda_num, aes(x=as.numeric(as.character(GZmehm1)))) +
+  geom_histogram(color="lightblue", fill="lightblue", binwidth=1, position="dodge") +
+  ylim(0, 15000)+
+  labs(title = " ", caption = "GEDA (2014 - 2015)", x = "1=very bad | 5=very good", y = "Responses") +
+  scale_y_continuous(labels=comma) + 
+  theme_few() +
+  theme(text = element_text(size= 16),
+        panel.border = element_blank(), panel.grid.major = 
+          element_blank(), panel.grid.minor = 
+          element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+ggsave(paste0("./charts/", str_replace_all(title, " ", "_"), ".png"))
+
+```
+
+
+
+```{r}
+subTitle <- "" # "(1973-74)" 
+title <- "Distribution of wellbeing scores within cleaned dataset"
+caption<- "" # "(1973-74)" 
+subTitle <- "" # "(1973-74)" 
+xLab <- "Wellbeing-Score (GZMehm1)"
+yLab <- "Count (#)"
+
+ggplot(df_geda_num, aes(x=as.numeric(as.character(GZmehm1))))+
+  geom_histogram(color="black", fill="lightblue", binwidth=.5, position="dodge") +
+  labs(title = title,
+       subtitle = subTitle,
+       caption = caption,
+       
+       x = xLab,
+       y = yLab,
+       colour = "Gears")+
+  scale_y_continuous(labels=comma) + 
+  theme_bw()
+```
+
+```{r, fig.width=15, fig.height=5}
+var_sig <- read_csv("data/2.7_stat_sig_var.csv")
+
+title <- "Statistically significant variables"
+
+ggplot(var_sig, aes(fill=condition, x=reorder(theme, -value), y=value)) +
+  geom_bar(position="stack", stat="identity") +
+  labs(x = " ", y = " ", caption = "GEDA (2014 - 2015)") +
+  theme_few() +
+  theme(text = element_text(size= 20),
+        panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank()) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_fill_manual(values = c("gray", "lightblue"))
+
+ggsave(paste0("./charts/", str_replace_all(title, " ", "_"), ".png"))
+
+
+```
+
+
+
+```{r 2.7: Statistically Sig Variables}
+var_sig <- read_csv("data/2.7_stat_sig_var.csv")
+
+ggplot(var_sig, aes(fill=condition, y=value, x=theme)) + 
+  geom_bar(position="stack", stat="identity")+
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, fig.width=15, fig.height=7}
+psm_df <- read_csv("data/causal_PSM_scores.csv")
+
+labs <- paste("Visit general practitioner in LTM:", c("NO", "YES"))
+psm_df %>%
+  mutate(treated = ifelse(treated == 1, labs[1], labs[2])) %>%
+  ggplot(aes(x = predict_score)) +
+  geom_histogram(color = "white", fill = "lightblue") +
+  facet_wrap(~treated) +
+  labs(title = "Propensity score", subtitle = "Probability of not having visited GP in LTM", caption = "GEDA (2014 - 2015)", x = " ", y = " ") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        text = element_text(size=20),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+```
+
+
+```{r Causal: PSM}
+
+psm_df <- read_csv("data/causal_PSM_scores.csv")
+
+labs <- paste("Visit general practitioner in LTM:", c("NO", "YES"))
+psm_df %>%
+  mutate(treated = ifelse(treated == 1, labs[1], labs[2])) %>%
+  ggplot(aes(x = predict_score)) +
+  geom_histogram(color = "white") +
+  facet_wrap(~treated) +
+  xlab("Propensity Score (Prob. of NOT having visited GP in LTM)") +
+  theme_bw()
+
+
+```
+
+```{r}
+
+mean_PSM_table <- read_csv("data/causal_mean_PSM_table.csv")
+kable(mean_PSM_table) %>%
+  add_header_above(c("Alias:","Last 12 Month: General Practitioner Visits","Gender (0:1)","Wellbeing Score (1:5)","Type of Smoker","German State of Residence","Household Type"))
+
+```
+
+```{r, fig.width=10, fig.height=3}
+df_chart <- read_csv("data/distribution_marginal_effects.csv")
+
+p_worsen <-  ggplot(df_chart, aes(x=score_worsen)) + 
+  geom_histogram(color="white", fill="lightblue") +
+  ylim(0,100000) +
+  xlim(-0.25,0.25) +
+  labs(title="Previous worse class", x = " ", y = "Frequency") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+p_neutral <-  ggplot(df_chart, aes(x=score_ensuring)) + 
+  geom_histogram(color="white", fill="lightblue") +
+  ylim(0,100000) +
+  xlim(-0.25,0.25) +
+  labs(title="Same wellbeing class", x = "Delta effect on respective classes", y = " ") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+p_improve <- ggplot(df_chart, aes(x=score_improve)) + 
+  geom_histogram(color="white", fill="lightblue") +
+  ylim(0,100000) +
+  xlim(-0.25,0.25) +
+  labs(title="Next better class", x = " ", y = " ") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+grid.arrange(grobs = list(p_worsen, p_neutral, p_improve), ncol=3,top="", caption = "GEDA (2014 - 2015)")
+
+
+```
+
+
+
+```{r}
+df_chart <- read_csv("data/distribution_marginal_effects.csv")
+
+p_worsen <-  ggplot(df_chart, aes(x=score_worsen)) + 
+  geom_histogram(color="black", fill="white") + labs(title="Impact towards being worse off")
+
+p_neutral <-  ggplot(df_chart, aes(x=score_ensuring)) + 
+  geom_histogram(color="black", fill="white") + labs(title="Impact towards staying in the same category")
+
+p_improve <- ggplot(df_chart, aes(x=score_improve)) + 
+  geom_histogram(color="black", fill="white") + labs(title="Impact towards improving")
+
+grid.arrange(grobs = list(p_worsen, p_neutral, p_improve), ncol=3,top="")
+```
+
+```{r}
+df_chart <- read_csv("data/Impact_of_incremental_improvement.csv")
+p <- ggplot(df_chart, aes(x=reorder(`_changed`, -mean), y=mean)) + 
+  geom_bar(stat="identity", color="white", fill = "lightblue",
+           position=position_dodge()) +
+  geom_errorbar(aes(ymin=mean-std, ymax=mean+std),
+                width=.2,
+                position=position_dodge(.9)) +
+  coord_flip() +
+  labs(title = "Impact of incremental improvement on wellbeing score", subtitle = "rn = rank of recommendation", x = "Variables", y = "Mean of rn", caption = "GEDA (2014 - 2015)") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+p
+
+
+```
+
+
+```{r}
+df_chart <- read_csv("data/Impact_of_incremental_improvement.csv")
+p <- ggplot(df_chart, aes(x=`_changed`, y=mean)) + 
+  geom_bar(stat="identity", color="black", 
+           position=position_dodge()) +
+  geom_errorbar(aes(ymin=mean-std, ymax=mean+std), width=.2,
+                 position=position_dodge(.9))  + coord_flip()
+p
+
+```
+
+```{r}
+df_chart <- read_csv("data/Impact_of_simulating_incremental_change_worsen.csv")
+p <- ggplot(df_chart, aes(x=reorder(`_changed`, mean), y=mean)) + 
+  geom_bar(stat="identity", color="white", fill = "lightblue", 
+           position=position_dodge()) +
+  geom_errorbar(aes(ymin=mean-std, ymax=mean+std),
+                width=.2,
+                position=position_dodge(.9))  +
+  coord_flip() +
+  labs(title = "Impact of simulating incremental change", subtitle = "Higher effect = increasing likelihood of worsening", x = "Variables", y = "Delta effect on the previous lower wellbeing class ", caption = "GEDA (2014 - 2015)") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+p
+
+```
+
+
+```{r}
+df_chart <- read_csv("data/Impact_of_simulating_incremental_change_worsen.csv")
+p <- ggplot(df_chart, aes(x=`_changed`, y=mean)) + 
+  geom_bar(stat="identity", color="black", 
+           position=position_dodge()) +
+  geom_errorbar(aes(ymin=mean-std, ymax=mean+std), width=.2,
+                 position=position_dodge(.9))  + coord_flip()
+p
+
+```
+
+```{r}
+df_geda_LifeExp2 <- read_csv("data/Figure_12_LifeExpectancy_to_Well-Being_Score.csv")
+
+ggplot(df_geda_LifeExp2, aes(LifeExp, as.numeric(GZmehm1)*as.numeric(age5B)*as.numeric(sex)* as.numeric(bula))) +
+  geom_point(color = "lightblue") +
+  stat_smooth(method = "lm", formula = y ~ x) +
+  labs(title = "Life expectency vs wellbeing score", subtitle = "including age and gender", x = "Life Expectancy", y = "LifeExp ~ score * age * sex", caption = "GEDA (2014 - 2015)") +
+  theme_few() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+```
+
+
+```{r}
+#Life Expectancy Chart
+df_geda_LifeExp2 <- read_csv("data/Figure_12_LifeExpectancy_to_Well-Being_Score.csv")
+
+ggplot(df_geda_LifeExp2, aes(LifeExp, as.numeric(GZmehm1)*as.numeric(age5B)*as.numeric(sex)* as.numeric(bula)) ) +
+  geom_point() +
+  stat_smooth(method = "lm", formula = y ~ x)
+
+```
+
+
+
+```{r}
+# box-plot from python --> refer to seaborn chart
+```
+
+
+```{r}
+# heatmap-plot from python confusion matrix --> refer to seaborn chart
+
+```
+
+```{r}
+sub3 <- read_csv("data/3.4.2 Fig 6 subsettable.csv")
+colnames(sub3) = c('coeff_label', 'Men', 'Women','Men', 'Women','Men', 'Women','Men', 'Women','Men', 'Women','Men', 'Women','ThemeEn','VarLabelEn','textLabelEn')
+dat2 <- sub3[1:11,]
+dat3 <- kable(dat2, align = "c", booktabs = TRUE, caption = "Figure 6 - statistically significant comparison between men and women", escape = FALSE) %>% add_header_above(c(' ','Value'=2,'Std.Error'=2,'t value'=2,'P-value'=2,'sig_col'=2,'logodds'=2,' ',' ',' '))
+dat3
+```
+
+```{r}
+fig5 <- read_csv("data/Figure 5.csv")
+fig.5 <- fig5[,]
+fig.5 <- kable(fig.5, align = "c", booktabs = TRUE, caption = "Figure 5 - Example of important contributor to wellbeing, age category impact on wellbeing", escape = FALSE)
+fig.5
+```
+
+
+```{r}
+load("data/df_patienten.RData")
+
+ffa_patient_age_distri <- ggplot(df_patienten, aes(AlterBeiAnlage)) + 
+   geom_histogram(alpha = 1, aes(y = ..density..), position = 'identity' , fill="lightblue") +
+    geom_vline(data=df_patienten, aes(xintercept=mean(df_patienten$AlterBeiAnlage)),
+             linetype="dashed") +
+   theme_few() +
+  labs(title = "Distribution of age of patients",
+       x = "Years of age", y = "Relative frequency",
+       caption = "FFA (2010 - 2020)") +
+  theme(panel.border = element_blank(),
+        text = element_text(size= 20),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "gray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+
+
+```
+
+```{r}
+df_chronic_ffa <- read_csv("data/ffa_chronic_proportion.csv")
+
+ffa_chronics <- ggplot(df_chronic_ffa, aes(x=rep_date_date , y=perc_chronis )) +
+    geom_area(colour="lightgray", size=.2, alpha=1, fill="lightblue") +
+   theme_few() +
+  labs(title = "Proportions of treated chronic patients",
+       x = " ", y = "Percent",
+       caption = "FFA (2014 - 2020)") +
+  theme(panel.border = element_blank(),
+        text = element_text(size= 20),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "lightgray"),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+
+```
+
+
+
+```{r, fig.width=15, fig.height=10}
+df_ffa_diag <- read_csv("data/ffa_distribution_diagnoses.csv")
+
+df_ffa_diag_chart <- df_ffa_diag %>% dplyr::select(c(ICDCode, AnzahlDiagnose)) %>% dplyr::group_by(ICDCode) %>% dplyr::summarize(AnzahlDiagnose = sum(AnzahlDiagnose)) %>% arrange(desc(AnzahlDiagnose)) %>% head(30)
+
+label_size <- 6
+
+ffa_diags <- ggplot(df_ffa_diag_chart, aes(x=reorder(ICDCode, -AnzahlDiagnose), y=AnzahlDiagnose)) + 
+geom_bar(stat="identity", width=1, fill="lightblue") +
+geom_label(
+  label="Hypertonia", 
+  x=2.5,
+  y=18000,
+  label.padding = unit(0.55, "lines"), # Rectangle size around label
+  label.size = 0.55,
+  size= label_size,
+  color = "white",
+  fill="#2c657d"
+) + 
+geom_label(
+  label="Virusinfection", 
+  x=4.5,
+  y=15000,
+  label.padding = unit(0.55, "lines"), # Rectangle size around label
+  label.size = 0.55,
+  size= label_size,
+  color = "white",
+  fill="#2c657d"
+) + 
+geom_label(
+  label="Diabetes", 
+  x=8,
+  y=8500,
+  label.padding = unit(0.55, "lines"), # Rectangle size around label
+  label.size = 0.55,
+  size= label_size,
+  color = "white",
+  fill="#2c657d"
+) + 
+geom_label(
+  label="Vaccination", 
+  x=13,
+  y=8500,
+  label.padding = unit(0.55, "lines"), # Rectangle size around label
+  label.size = 0.55,
+  size= label_size,
+  color = "white",
+  fill="#2c657d"
+) + 
+geom_label(
+  label="Coronary heart diseases", 
+  x=15,
+  y=6200,
+  label.padding = unit(0.55, "lines"), # Rectangle size around label
+  label.size = 0.55,
+  size= label_size,
+  color = "white",
+  fill="#2c657d"
+) +
+ theme_few() +
+labs(title = "Top 30 diagnoses",
+     x = "ICD diagnoses", y = "Frequency",
+     caption = "FFA (2000 - 2020)") +
+theme(panel.border = element_blank(),
+      text = element_text(size= 20),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.line = element_line(color = "gray"),
+      axis.ticks.x = element_blank(),
+      axis.text.x = element_text(angle = 90),
+      axis.ticks.y = element_blank())
+
+
+grid.arrange(
+  grobs = list(ffa_patient_age_distri, ffa_chronics, ffa_diags),
+  widths = c(1, 1),
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 3))
+)
+
+```
+
+
+```{r}
+
+df_geda_theme <- read_excel("data/geda_theme_list.xlsx")
+kable(df_geda_theme, align = "l", booktabs = TRUE, escape = FALSE, "latex") %>%
+  kable_styling(latex_options = c("striped", "scale_down")) %>% as_image()
+```
+
+```{r}
+
+var <- c("Doctor Visits (IAarzt1B)", "")
+ord <- c("0.104", "(0.060)")
+iv <- c("1.057 ***", "(0.154)")
+
+df_iv <- data.frame("var"=var, "ord" = ord, "iv" = iv)
+
+colnames(df_iv) = c('', 'Ordinal Logistic Regression', 'Instrumental Variable')
+
+
+ t <- kable(df_iv, align = "c", booktabs = TRUE,  escape = FALSE, "latex") %>% 
+  add_header_above(c('', 'Dependend variable: GZmehm1'=2)) %>% add_footnote(c("St. Err. in brackets"), notation="none")
+ 
+ save_kable(t, "./charts/IV_comparison.png")
+ t %>% as_image()
+
+```
+
+```{r}
+
+df_actionable <- read_csv("data/actionable.csv")
+kable(df_actionable, align = "l", booktabs = TRUE, escape = FALSE, "latex") %>%
+  kable_styling(latex_options = c("striped", "scale_down")) %>% as_image()
+```
+
+
+```{r}
+df_meta <- read_excel("../analysis/data.doc/GEDA14_Variablenuebersicht_Analyse_VarPrep.xlsx", sheet="levels")
+
+df_var_list <- df_meta %>% dplyr::select(c(Varname, ThemeEn, VarLabelEn)) %>% dplyr::rename('Variable' = Varname, "Theme"= ThemeEn, "Description" = VarLabelEn) %>% dplyr::group_by(Variable, Theme, Description) %>% dplyr::summarise()
+
+kable(df_var_list[1:65,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("./charts/data_gloss_65.png")
+kable(df_var_list[66:130,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("./charts/data_gloss_130.png")
+kable(df_var_list[131:195,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("./charts/data_gloss_195.png")
+kable(df_var_list[196:260,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("./charts/data_gloss_260.png")
+kable(df_var_list[261:275,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("./charts/data_gloss_269.png")
+```
+
+
+
+```{r, fig.width=16, fig.height=7}
+df_barchart_group_ranking <- read_csv("data/grouped_barchart_ranking.csv")
+
+df_barchart_group_ranking <- df_barchart_group_ranking %>% dplyr::rename('Variable' = `_changed`, "Rank" = rn)
+
+df_barchart_group_ranking$Rank <- as.character(df_barchart_group_ranking$Rank)
+
+ggplot(df_barchart_group_ranking, aes(Variable, count)) + geom_bar(aes(fill = Rank), 
+   width = 0.4, position = position_dodge(width=0.5), stat="identity") +
+    theme_bw() +
+  labs(title = "Recommendations and their count of rank across the top 5 suggestions",
+     x = " ", y = " # of rank ",
+     caption = "based on GEDA (2014 - 2015)") +
+  theme(panel.border = element_blank(), panel.grid.major = 
+          element_blank(), panel.grid.minor = 
+          element_blank(),
+        text = element_text(size= 20),
+        axis.line = element_line(color = "gray"),
+        axis.text.x = element_text(size = 20, angle=90),
+        axis.text.y = element_text(size = 20),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank()) +scale_fill_manual(values=c("#ADD8E6", "#a9c2c9", "#c8d9de","#d3d9db", "#dbdbdb"))
+
+```
+
+  
+  
+
