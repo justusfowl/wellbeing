@@ -33,6 +33,9 @@ library(knitr)
 library(kableExtra)
 library(stargazer)
 library(MatchIt)
+library(AER) #for instrumental variable regression
+library(sandwich) #for stargazer
+library(ivpack)
 
 
 # library(performanceEstimation)
@@ -650,32 +653,39 @@ Our goal here is to run separate binary logistic regressions for different level
 #Check Parellel Slopes Assumption Holds
 #psa = parallel slopes assumption
 
+#############################################
+#                                           #
+#     regressions have been #'s out         #
+#         in order to run quicker           #
+#                                           #
+#############################################             
+
 #health = 1
 df_psa1 <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
 df_psa1$GZmehm1 <- as.numeric(df_psa1$GZmehm1)
 df_psa1$GZmehm1[df_psa1$GZmehm1 > 1] <- 0
-logit_1 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa1)
+#logit_1 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa1)
 
 #health <= 2
 df_psa2 <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
 df_psa2$GZmehm1 <- as.numeric(df_psa2$GZmehm1)
 df_psa2$GZmehm1[df_psa2$GZmehm1 <= 2] <- 1
 df_psa2$GZmehm1[df_psa2$GZmehm1 > 2] <- 0
-logit_2 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa2)
+#logit_2 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa2)
 
 #health <= 3
 df_psa3 <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
 df_psa3$GZmehm1 <- as.numeric(df_psa3$GZmehm1)
 df_psa3$GZmehm1[df_psa3$GZmehm1 <= 3] <- 1
 df_psa3$GZmehm1[df_psa3$GZmehm1 > 3] <- 0
-logit_3 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa3)
+#logit_3 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa3)
 
 #health <= 4
 df_psa4 <- df_tmp %>% dplyr::select(-c(KHhyp12pB, KHbbmyo12))
 df_psa4$GZmehm1 <- as.numeric(df_psa2$GZmehm1)
 df_psa4$GZmehm1[df_psa4$GZmehm1 <= 4] <- 1
 df_psa4$GZmehm1[df_psa4$GZmehm1 > 4] <- 0
-logit_4 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa4)
+#logit_4 <- glm(GZmehm1 ~ .,family = binomial, data = df_psa4)
 
 #Summary Statistics
 #summary(logit_1)
@@ -726,7 +736,9 @@ write.csv(df_base, "df_base_numeric.csv", row.names=FALSE)
 write.csv(df_base_char, "df_base_char.csv", row.names=FALSE)
 ```
 
-Causal Analysis: Propensity Score Matching
+Causal Analysis: 
+
+1) Propensity Score Matching
 ```{r}
 #psm = propensity score matching
 psm_model <- glm(IAarzt1B ~ .,family = binomial (link = "probit"), data = df_base)
@@ -813,7 +825,75 @@ psm_results <- polr(GZmehm1 ~
 
 #+ KAgfka + KAgfa + KAgfka1 + KAgfmk + IPinfl4 + IPinfl6B + IPtet_lz + AMarztB + AMfrei + AUarbzD_k + IAhypus + IAcholus + IAdiabus + IAkfutyp2B_lz + IAkfutyp4B_lz + IAtermin + IAweg + IAarzt14B + IAarzt8C + IAkhs + IAther2B + IApflege + GZmehm3C + BBbehB+ GZsubj1+ SHseh1 + SHhoer1+ KHlipA + BBmyo12 +BBsa12+KHhyp12 + KHmyo12+KHsa12+ KHdiabB12+ KHab12+ KHlipmedA+ KHcb12+ KHlz12+ KHcle12 + KHniB12+ KHdge12+ KHra12         
 summary(psm_results)
+stargazer(psm_results)
 ```
+
+
+2) Instrumental Variable
+```{r}
+#csv file was read with mapping of IV
+iv <- read.csv("data/IV_variable.csv")
+#iv <- read.csv("data/IV_variable_BF_2.csv")
+
+#join the instrumental variables to the data
+df_iv <- merge(x = df_base, y = iv, all.x = TRUE, by.x = "bula", by.y = "bula")
+
+#summary(df_iv)
+
+#Before multiplying the variables need to convert from factor to numeric
+df_iv$IPinfl6B_num <- as.numeric(as.character(df_iv$IPinfl6B))
+
+#NEED TO CONVERT THE NUMERIC VARIABLES TO 1 -> 0, 2 -> 1.5, 3 -> 3.5 AND 4 -> 5 given they represent a range of values...we are using the average
+df_iv$IPinfl6B_num[df_iv$IPinfl6B_num == 1] <- 0
+df_iv$IPinfl6B_num[df_iv$IPinfl6B_num == 2] <- 1.5
+df_iv$IPinfl6B_num[df_iv$IPinfl6B_num == 3] <- 3.5
+df_iv$IPinfl6B_num[df_iv$IPinfl6B_num == 4] <- 5
+
+#multiplying the variables together
+df_iv$IV <- df_iv$st_km * df_iv$IPinfl6B_num
+
+#this variable is using only the density of streets / km2 variable as an IV. Only used to validate that state level IV would not be appropriate.
+#df_iv$IV <- df_iv$st_km 
+
+#BILL FLUNEY Variable
+#df_iv$IV <- df_iv$fatal_acc_per_million
+
+
+#Graph the histogram of IV variables by having or not gone to visit a general practicioner
+df_iv %>%
+  mutate(IAarzt1B = ifelse(IAarzt1B == 1, labs[1], labs[2])) %>%
+  ggplot(aes(x = IV)) +
+  geom_histogram(color = "white") +
+  facet_wrap(~IAarzt1B) +
+  xlab("Instrumental Variable") +
+  theme_bw()
+
+#hist(df_iv$IV)
+```
+
+#First Stage
+Looking at the relationship between the IV and a person visiting a general practictioner
+```{r}
+#Convert from Factor to Numeric in order to run IVREG
+df_iv$GZmehm1 <- as.numeric(as.character(df_iv$GZmehm1))
+
+first_stage <- lm(IAarzt1B ~ IV + sex + age5B + MIbirthplace + MIcitizen + bula + PAgroe + PAgewiB + IAkv1D + SDaeqeink_k + SDbild4C + SDbverh2 + SDhvtypD + SDmainstat + SDalo+ PAhhtype + AKoft12_k + RCstat + KAehispaq2 + KAspodauC_k + KAehispaq8, data = df_iv)
+
+#Summary of first stage results
+summary(first_stage)
+```
+
+#Second Stage
+```{r}
+iv1 = ivreg(GZmehm1 ~ IAarzt1B + sex + age5B + MIbirthplace + MIcitizen + bula + PAgroe + PAgewiB + IAkv1D + SDaeqeink_k + SDbild4C + SDbverh2 + SDhvtypD + SDmainstat + SDalo+ PAhhtype + AKoft12_k + RCstat + KAehispaq2 + KAspodauC_k + KAehispaq8
+            |
+              sex + age5B + MIbirthplace + MIcitizen + bula + PAgroe + PAgewiB + IAkv1D + SDaeqeink_k + SDbild4C + SDbverh2 + SDhvtypD + SDmainstat + SDalo+ PAhhtype + AKoft12_k + RCstat + KAehispaq2 + KAspodauC_k + KAehispaq8 + IV, data = df_iv)
+
+summary(iv1)
+
+#summary(iv1, vcov = sandwich, diagnostics = TRUE)
+```
+
 
 ## Model selection
 
