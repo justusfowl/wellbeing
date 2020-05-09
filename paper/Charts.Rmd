@@ -98,10 +98,12 @@ ggplot(df_chart, aes(y=Value, x=Type)) +
 #xLab <- "Wellbeing-Score (GZMehm1)"
 #yLab <- "Count (#)"
 
+title <- "gzmehm1_hist"
+
 ggplot(df_geda_num, aes(x=as.numeric(as.character(GZmehm1)))) +
-  geom_histogram(color="white", fill="lightblue", binwidth=.5, position="dodge") +
+  geom_histogram(color="lightblue", fill="lightblue", binwidth=1, position="dodge") +
   ylim(0, 15000)+
-  labs(title = "Wellbeing score responses", caption = "GEDA (2014 - 2015)", x = "1=very bad | 5=very good", y = "Responses") +
+  labs(title = " ", caption = "GEDA (2014 - 2015)", x = "1=very bad | 5=very good", y = "Responses") +
   scale_y_continuous(labels=comma) + 
   theme_few() +
   theme(text = element_text(size= 16),
@@ -111,6 +113,8 @@ ggplot(df_geda_num, aes(x=as.numeric(as.character(GZmehm1)))) +
         axis.line = element_line(color = "gray"),
         axis.ticks.x = element_blank(),
         axis.ticks.y = element_blank())
+
+ggsave(paste0("./charts/", str_replace_all(title, " ", "_"), ".png"))
 
 ```
 
@@ -577,11 +581,11 @@ df_meta <- read_excel("../analysis/data.doc/GEDA14_Variablenuebersicht_Analyse_V
 
 df_var_list <- df_meta %>% dplyr::select(c(Varname, ThemeEn, VarLabelEn)) %>% dplyr::rename('Variable' = Varname, "Theme"= ThemeEn, "Description" = VarLabelEn) %>% dplyr::group_by(Variable, Theme, Description) %>% dplyr::summarise()
 
-kable(df_var_list[1:65,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("65.png")
-kable(df_var_list[66:130,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("130.png")
-kable(df_var_list[131:195,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("195.png")
-kable(df_var_list[196:260,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("260.png")
-kable(df_var_list[261:269,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("269.png")
+kable(df_var_list[1:65,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("./charts/data_gloss_65.png")
+kable(df_var_list[66:130,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("./charts/data_gloss_130.png")
+kable(df_var_list[131:195,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("./charts/data_gloss_195.png")
+kable(df_var_list[196:260,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("./charts/data_gloss_260.png")
+kable(df_var_list[261:275,], align = "l", booktabs = TRUE,  escape = FALSE, "latex") %>% save_kable("./charts/data_gloss_269.png")
 ```
 
 
